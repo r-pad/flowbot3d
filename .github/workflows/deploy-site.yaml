@@ -1,0 +1,39 @@
+name: Deploy Site
+
+on:
+  workflow_call:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Site Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: site
+          path: docs/site/
+
+      - name: Setup Pages
+        if: ${{ !env.ACT }}
+        uses: actions/configure-pages@v1
+
+      - name: Upload Artifact to Pages
+        if: ${{ !env.ACT }}
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: docs/site/
+
+      - name: Deploy to GitHub Pages
+        if: ${{ !env.ACT && github.ref == 'refs/heads/main' }}
+        id: deployment
+        uses: actions/deploy-pages@main

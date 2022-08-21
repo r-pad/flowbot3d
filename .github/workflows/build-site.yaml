@@ -1,0 +1,38 @@
+name: Build Site
+
+on:
+  workflow_call:
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      ##############################################
+      # Skip caching if using a local runner.
+      - uses: actions/setup-python@v4
+        if: ${{ !env.ACT }}
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: "pyproject.toml"
+      - uses: actions/setup-python@v4
+        if: ${{ env.ACT }}
+        with:
+          python-version: '3.10'
+      ##############################################
+
+      - name: Install Dependencies
+        run: pip install -e ".[build_docs]"
+
+      - name: Build mkdocs site
+        working-directory: docs
+        run: mkdocs build
+
+      - name: Upload the built site.
+        uses: actions/upload-artifact@v3
+        if: ${{ !env.ACT }}
+        with:
+          name: site
+          path: docs/site/

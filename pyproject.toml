@@ -1,0 +1,37 @@
+[project]
+name = "python_pkg_template"
+version = "0.1.0"
+description = "A Python Package Template"
+readme = "README.md"
+requires-python = ">=3.6"
+license = {file = "LICENSE.txt"}
+authors = [
+  {email = "baeisner@andrew.cmu.edu", name = "Ben Eisner"}
+]
+dependencies = []
+
+[build-system]
+requires = [
+  "setuptools >= 62.3.2",
+  "setuptools-scm",
+  "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+develop = [
+  "pytest",
+  "black >= 22.3.0",
+  "isort",
+  "mypy",
+  "pylint",
+  "autoflake",
+  "pre-commit",
+]
+build_docs = [
+  "mkdocs-material",
+  "mkdocstrings[python]",
+]
+
+[tool.isort]
+profile = "black"
