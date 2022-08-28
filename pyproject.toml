@@ -36,7 +36,7 @@ build_docs = [
 
 # This is required to allow us to have notebooks/ at the top level.
 [tool.setuptools]
-py-modules = ["python_pkg_template"]
+packages = ["python_pkg_template"]
 
 [tool.isort]
 profile = "black"
