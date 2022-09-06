@@ -11,7 +11,7 @@ jobs:
   test:
     uses: ./.github/workflows/run-tests.yaml
     with:
-      pkgname: python_pkg_template
+      pkgname: flowbot3d
       install_string: .[develop]
   build_site:
     uses: ./.github/workflows/build-site.yaml

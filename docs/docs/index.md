@@ -1,3 +1,3 @@
-# python_pkg_template
+# flowbot3d
 
 Some sample text for the website.

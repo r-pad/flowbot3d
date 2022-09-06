@@ -1,5 +1,5 @@
 [project]
-name = "python_pkg_template"
+name = "flowbot3d"
 version = "0.1.0"
 description = "A Python Package Template"
 readme = "README.md"
@@ -36,7 +36,7 @@ build_docs = [
 
 # This is required to allow us to have notebooks/ at the top level.
 [tool.setuptools]
-packages = ["python_pkg_template"]
+packages = ["flowbot3d"]
 
 [tool.isort]
 profile = "black"
