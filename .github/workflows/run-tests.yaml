@@ -31,6 +31,9 @@ jobs:
           python-version: '3.10'
       ##############################################
 
+      - name: Install pyg special-like.
+        run: pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cpu.html
+
       - name: Install package
         run: pip install "${{ inputs.install_string }}"
 
