@@ -305,7 +305,6 @@ def load_model(cfg, model_path, env_name):
     cfg.agent["obs_shape"] = obs_shape
     cfg.agent["action_shape"] = action_shape
     cfg.agent["action_space"] = action_space
-    breakpoint()
 
     agent = build_brl(cfg.agent)
     load_checkpoint(agent, model_path, map_location="cpu")
