@@ -7,7 +7,6 @@ import numpy as np
 import pybullet as p
 from sapien.core import Pose
 from scipy.spatial.transform import Rotation as R
-from trimesh import viewer  # noqa
 
 import flowbot3d.grasping.env  # noqa
 from flowbot3d.datasets.calc_art import compute_new_points
@@ -439,12 +438,12 @@ if __name__ == "__main__":
     bad_doors = ["8930", "9003", "9016", "9107", "9164", "9168", "9386", "9388", "9410"]
 
     # run("OpenCabinetDoorGripper_{}_link_0-v0".format("100243"), 0, False, False)
-    ump_split_f = open("/home/flowbot3d/umpnet_data_split.json")
+    ump_split_f = open(f"{os.getcwd()}/umpnet_data_split.json")
     data = json.load(ump_split_f)
     classes = data["test"].keys()
     results = defaultdict(list)
     file = open(
-        f"/home/{os.getlogin()}/flowbot3d/umpnet_obj_splits/test_test_split.txt",
+        f"{os.getcwd()}/umpnet_obj_splits/test_test_split.txt",
         "r",
     )
     available_envs = []
@@ -473,22 +472,22 @@ if __name__ == "__main__":
 
         if succ < 0.1:
             if os.path.isfile(
-                f"/home/{os.getlogin()}/flowbot3d/umpmetric_exec_vid/{i}.mp4"
+                f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4"
             ):
-                os.remove(f"/home/{os.getlogin()}/flowbot3d/umpmetric_exec_vid/{i}.mp4")
+                os.remove(f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4")
             if os.path.isfile(
-                f"/home/{os.getlogin()}/flowbot3d/umpmetric_exec_vid/fail/{i}.mp4"
+                f"{os.getcwd()}/umpmetric_exec_vid/fail/{i}.mp4"
             ):
                 os.remove(
-                    f"/home/{os.getlogin()}/flowbot3d/umpmetric_exec_vid/fail/{i}.mp4"
+                    f"{os.getcwd()}/umpmetric_exec_vid/fail/{i}.mp4"
                 )
         else:
             if os.path.isfile(
-                f"/home/{os.getlogin()}/flowbot3d/umpmetric_exec_vid/{i}.mp4"
+                f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4"
             ):
                 shutil.move(
-                    f"/home/{os.getlogin()}/flowbot3d/umpmetric_exec_vid/{i}.mp4",
-                    f"/home/{os.getlogin()}/flowbot3d/umpmetric_exec_vid/fail/{i}.mp4",
+                    f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4",
+                    f"{os.getcwd()}/umpmetric_exec_vid/fail/{i}.mp4",
                 )
         for cl in classes:
             idx = [m.start() for m in re.finditer("_", i)]

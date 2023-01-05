@@ -1,4 +1,4 @@
-agent_class: "part_embedding.grasping.agent.agent.FloatingGripperAgent"
+agent_class: "flowbot3d.grasping.agent.agent.FloatingGripperAgent"
 name: "floating_gripper"
 urdf_file: "../../../../../../third_party/where2act/code/robots/panda_gripper.urdf"
 control_frequency: 100

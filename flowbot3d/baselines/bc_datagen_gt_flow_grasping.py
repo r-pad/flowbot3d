@@ -397,7 +397,7 @@ if __name__ == "__main__":
         run(i, 1, False)
         cwd = os.getcwd()
         os.chdir(f"/home/{os.getlogin()}/ManiSkill-Learn")
-        trans_cmd = f"python tools/convert_demo_pcd.py --max-num-traj=-1 --env-name={i} --traj-name=/home/{os.getlogin()}/flowbot3d/umpnet_bc_demo_traj/{i}/trajectory.h5 --output-name=./umpnet_pcd_demo_traj/{i}/traj_pcd.h5 --obs-mode pointcloud"
+        trans_cmd = f"python tools/convert_demo_pcd.py --max-num-traj=-1 --env-name={i} --traj-name={os.getcwd()}/umpnet_bc_demo_traj/{i}/trajectory.h5 --output-name=./umpnet_pcd_demo_traj/{i}/traj_pcd.h5 --obs-mode pointcloud"
         os.system(trans_cmd)
         os.chdir(cwd)
-        shutil.rmtree(f"/home/{os.getlogin()}/flowbot3d/umpnet_bc_demo_traj/{i}")
+        shutil.rmtree(f"{os.getcwd()}/umpnet_bc_demo_traj/{i}")
