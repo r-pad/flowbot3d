@@ -9,8 +9,8 @@ from mani_skill.utils.osc import OperationalSpaceControlInterface
 from pytransform3d import transformations
 from scipy.spatial.transform import Rotation as R
 
-from part_embedding.datasets.calc_art import compute_new_points
-from part_embedding.datasets.pm.pm_raw import parse_urdf
+from flowbot3d.datasets.calc_art import compute_new_points
+from flowbot3d.datasets.pm.pm_raw import parse_urdf
 
 
 def transform_pcd(obs, chain, magnitude):

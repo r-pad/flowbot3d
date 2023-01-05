@@ -1,22 +1,19 @@
 import os
-import sys
 
 import gym
 import numpy as np
 import torch
 from h5py import File
-from mani_skill_learn.env.env_utils import get_env_state, true_done
+from mani_skill_learn.env.env_utils import get_env_state
 from mani_skill_learn.env.replay_buffer import ReplayMemory
 from mani_skill_learn.utils.data import compress_size, flatten_dict, to_np, unsqueeze
 from mani_skill_learn.utils.data.compression import compress_size
-from part_embedding.baselines.gt_flow_grasping_ump_metric import (
-    max_flow_pt_calc_no_ransac,
-)
 from sapien.core import Pose
 from scipy.spatial.transform import Rotation as R
 
 import flowbot3d.grasping.env  # noqa
 from flowbot3d.baselines.bc_datagen_gt_flow_grasping import GLOBAL_PULL_VECTOR
+from flowbot3d.baselines.gt_flow_grasping_ump_metric import max_flow_pt_calc_no_ransac
 
 GLOBAL_ACT = None
 GLOBAL_PULL_VECTOR = np.array([-1, 0, 0])

@@ -2,10 +2,10 @@ import os
 
 import gym
 import numpy as np
-import part_embedding.grasping.env  # noqa
 import pyransac3d as pyrsc
 from trimesh import viewer  # noqa
 
+import flowbot3d.grasping.env  # noqa
 from flowbot3d.datasets.calc_art import compute_new_points
 from flowbot3d.datasets.pm.pm_raw import parse_urdf_from_string
 

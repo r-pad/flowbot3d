@@ -1,20 +1,18 @@
 import math
 import os
-import sys
 
 import gym
 import numpy as np
 import open3d as o3d
-import part_embedding.grasping.env  # noqa
 import torch
-from part_embedding.flow_prediction.animate import UMPAnimation
-from part_embedding.flow_prediction.latest_models import load_model
-
-# from mani_skill_learn.env.observation_process import process_mani_skill_base
 from sapien.core import Pose
 from scipy.spatial.distance import cdist
 from scipy.spatial.transform import Rotation as R
 from trimesh import viewer  # noqa
+
+import flowbot3d.grasping.env  # noqa
+from flowbot3d.flow_prediction.animate import UMPAnimation
+from flowbot3d.flow_prediction.latest_models import load_model
 
 GLOBAL_PULL_VECTOR = np.array([[-1, 0, 0]])
 

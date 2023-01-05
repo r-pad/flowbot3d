@@ -1,18 +1,17 @@
 import math
 import os
-import sys
 
 import gym
 import numpy as np
 import torch
-from part_embedding.flow_prediction.animate import FlowNetAnimation
-from part_embedding.flow_prediction.latest_models import load_model
 
 # from mani_skill_learn.env.observation_process import process_mani_skill_base
 from sapien.core import Pose
 from scipy.spatial.transform import Rotation as R
 
 import flowbot3d.grasping.env  # noqa
+from flowbot3d.flow_prediction.animate import FlowNetAnimation
+from flowbot3d.flow_prediction.latest_models import load_model
 
 GLOBAL_PULL_VECTOR = np.array([[-1, 0, 0]])
 
