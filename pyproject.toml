@@ -9,9 +9,9 @@ authors = [
   {email = "baeisner@andrew.cmu.edu", name = "Ben Eisner"}
 ]
 dependencies = [
-  "gym",
+  "gym <= 0.20.0",
   "h5py",
-  "numpy >= 1.22.4",
+  "numpy <= 1.3.1",
   "open3d",
   "opencv-python",
   "pandas",
@@ -22,8 +22,9 @@ dependencies = [
   "rpad-partnet-mobility-utils[pybullet] @ git+https://github.com/r-pad/partnet_mobility_utils",
   "rpad-pyg @ git+https://github.com/r-pad/pyg_libs",
   "rpad-visualize-3d @ git+https://github.com/r-pad/visualize_3d",
-  "sapien; sys_platform == 'linux'",
+  "sapien == 1.1.0; sys_platform == 'linux'",
   "scipy",
+  "shapely",
   "torch >= 1.11.0",
   "typer >= 0.4.0",
   "torch-scatter >= 2.0.9",
@@ -31,6 +32,7 @@ dependencies = [
   "torch-cluster >= 1.6.0",
   "torch-spline-conv >= 1.2.1",
   "torch-geometric >= 2.0",
+  "transforms3d",
   "trimesh",
   "tqdm",
   "wandb",

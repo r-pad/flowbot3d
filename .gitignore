@@ -370,3 +370,7 @@ cython_debug/
 checkpoints/
 wandb/
 results/
+
+*.stl
+imgui.ini
+umpmetric_gtflow_unseen_res.txt
