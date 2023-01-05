@@ -9,6 +9,8 @@ pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv t
 
 pip install -e "git+https://github.com/harryzhangOG/ManiSkill.git#egg=mani-skill"
 
+pip install -e ./third_party/ManiSkill
+
 pip install -e "git+https://github.com/haosulab/ManiSkill-Learn.git#egg=mani-skill-learn"
 
 pip install -e .
