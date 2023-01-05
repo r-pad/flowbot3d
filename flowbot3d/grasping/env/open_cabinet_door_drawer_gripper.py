@@ -5,21 +5,13 @@ from copy import deepcopy
 
 import numpy as np
 import sapien
+from mani_skill.env.open_cabinet_door_drawer import OpenCabinetEnvBase
+from mani_skill.utils.config_parser import process_variables, process_variants
+from mani_skill.utils.misc import get_actor_state, get_pad_articulation_state
 from sapien.core import Articulation, Pose
 
 from flowbot3d.datasets.calc_art import compute_new_points
 from flowbot3d.datasets.pm.pm_raw import parse_urdf_from_string
-from third_party.ManiSkill.mani_skill.env.open_cabinet_door_drawer import (
-    OpenCabinetEnvBase,
-)
-from third_party.ManiSkill.mani_skill.utils.config_parser import (
-    process_variables,
-    process_variants,
-)
-from third_party.ManiSkill.mani_skill.utils.misc import (
-    get_actor_state,
-    get_pad_articulation_state,
-)
 
 _this_file = pathlib.Path(__file__).resolve()
 

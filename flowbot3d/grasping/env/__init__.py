@@ -1,8 +1,7 @@
 import pathlib
 
 from gym import register
-
-from third_party.ManiSkill.mani_skill.utils.misc import get_raw_yaml
+from mani_skill.utils.misc import get_raw_yaml
 
 _this_file = pathlib.Path(__file__).resolve()
 

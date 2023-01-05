@@ -1,11 +1,7 @@
 import numpy as np
+from mani_skill.agent.agent import Agent, get_actor_by_name
+from mani_skill.agent.controllers import PositionController, VelocityController
 from sapien.core import Pose
-
-from third_party.ManiSkill.mani_skill.agent.agent import Agent, get_actor_by_name
-from third_party.ManiSkill.mani_skill.agent.controllers import (
-    PositionController,
-    VelocityController,
-)
 
 
 def concat_vec_in_dict(d, key_list):
