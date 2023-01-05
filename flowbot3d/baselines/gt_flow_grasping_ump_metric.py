@@ -378,7 +378,7 @@ def run(env_name, level, save_video, door=False):
     video_writer = None
 
     for i in range(150):
-        env.render("human")
+        # env.render("human")
         if save_video:
             image = env.render(mode="color_image")["world"]["rgb"]
             image = image[..., ::-1]

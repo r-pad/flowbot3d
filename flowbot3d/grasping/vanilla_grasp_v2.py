@@ -402,7 +402,7 @@ if __name__ == "__main__":
     phase_counter = 0
     rpy = None
     for i in range(10_000):
-        env.render("human")
+        # env.render("human")
         action, phase, phase_counter, rpy = vanilla_grasping_policy(
             env, max_flow_knob_pt, gripper_horizontal, phase, phase_counter, rpy
         )
