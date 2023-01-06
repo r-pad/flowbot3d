@@ -420,7 +420,7 @@ def run(env_name, level, save_video, door=False):
             print("DIST: ", norm_dist)
             if np.isclose(norm_dist, 0.0, atol=1e-5):
                 print("SUCCESS")
-                return 0
+                return norm_dist
     env.close()
     if not math.isnan(env.cabinet.get_qpos()[0]):
         return norm_dist
@@ -456,8 +456,6 @@ if __name__ == "__main__":
             env_id = i[idx[0] + 1 : idx[1]]
             if env_id in data["test"][cl]["test"]:
                 temp = cl
-        if temp != "Door":
-            continue
         print("Executing task for env: ", i)
         print("Index: ", num)
         bd = False
@@ -471,20 +469,12 @@ if __name__ == "__main__":
             succ = run(i, 0, True, False)
 
         if succ < 0.1:
-            if os.path.isfile(
-                f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4"
-            ):
+            if os.path.isfile(f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4"):
                 os.remove(f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4")
-            if os.path.isfile(
-                f"{os.getcwd()}/umpmetric_exec_vid/fail/{i}.mp4"
-            ):
-                os.remove(
-                    f"{os.getcwd()}/umpmetric_exec_vid/fail/{i}.mp4"
-                )
+            if os.path.isfile(f"{os.getcwd()}/umpmetric_exec_vid/fail/{i}.mp4"):
+                os.remove(f"{os.getcwd()}/umpmetric_exec_vid/fail/{i}.mp4")
         else:
-            if os.path.isfile(
-                f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4"
-            ):
+            if os.path.isfile(f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4"):
                 shutil.move(
                     f"{os.getcwd()}/umpmetric_exec_vid/{i}.mp4",
                     f"{os.getcwd()}/umpmetric_exec_vid/fail/{i}.mp4",

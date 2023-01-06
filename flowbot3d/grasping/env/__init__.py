@@ -63,7 +63,7 @@ for cabinet_id in cabinet_drawer_infos:
             id="OpenCabinetDrawerGripper_{:s}_link_{:d}-v0".format(
                 cabinet_id, fixed_target_link_id
             ),
-            entry_point="flowot3d.grasping.env.open_cabinet_door_drawer_gripper:OpenCabinetDrawerGripperEnv",
+            entry_point="flowbot3d.grasping.env.open_cabinet_door_drawer_gripper:OpenCabinetDrawerGripperEnv",
             kwargs={
                 "variant_config": {"partnet_mobility_id": cabinet_id},
                 "fixed_target_link_id": fixed_target_link_id,
