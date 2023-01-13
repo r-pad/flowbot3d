@@ -119,7 +119,7 @@ class Flowbot3DDataset:
         )
 
         # Compute the mask of any part which has flow.
-        mask = (~(np.isclose(flow, 0.0)).all(axis=-1)).astype(np.bool8)
+        mask = (~(np.isclose(flow, 0.0)).all(axis=-1)).astype(np.bool_)
 
         if self.n_points:
             rng = np.random.default_rng(seed2)
