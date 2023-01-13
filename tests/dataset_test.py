@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from rpad.pyg.dataset import MultiKeyDataset
+from rpad.pyg.dataset import CachedByKeyDataset
 
 from flowbot3d.dataset import Flowbot3DDataset
 from flowbot3d.tg_dataset import Flowbot3DTGDataset
@@ -48,7 +48,7 @@ def test_simple_tg_dataset():
 
 def test_parallel_sampling():
     with tempfile.TemporaryDirectory() as tmpdir:
-        dset = MultiKeyDataset(
+        dset = CachedByKeyDataset(
             dset_cls=Flowbot3DTGDataset,
             dset_kwargs=dict(
                 root=TESTDATA_DIR,
@@ -62,7 +62,6 @@ def test_parallel_sampling():
             processed_dirname="processed_test",
             n_repeat=5,
             n_proc=2,
-            use_processed=True,
             seed=12345,
         )
 
