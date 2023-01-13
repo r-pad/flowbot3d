@@ -2,9 +2,9 @@ from typing import Dict, List, Literal, Optional, Sequence, TypedDict, Union
 
 import numpy as np
 import numpy.typing as npt
-import partnet_mobility_utils.articulate as pma
-import partnet_mobility_utils.dataset as pmd
-from partnet_mobility_utils.data import PMObject
+import rpad.partnet_mobility_utils.articulate as pma
+import rpad.partnet_mobility_utils.dataset as pmd
+from rpad.partnet_mobility_utils.data import PMObject
 
 
 class Flowbot3DData(TypedDict):
@@ -61,7 +61,7 @@ def compute_normalized_flow(
         link_flow = P_world_new - P_world
         flow += link_flow
 
-    largest_mag = np.linalg.norm(flow, axis=-1).max()
+    largest_mag: float = np.linalg.norm(flow, axis=-1).max()
 
     normalized_flow = flow / (largest_mag + 1e-6)
 
@@ -94,17 +94,17 @@ class Flowbot3DDataset:
         self.randomize_camera = randomize_camera
         self.n_points = n_points
 
-    def __getitem__(self, item: Union[str, int]) -> Flowbot3DData:
-        if isinstance(item, str):
-            obj_id = item
-        else:
-            obj_id = self._dataset._ids[item]
-
+    def get_data(self, obj_id: str, seed=None) -> Flowbot3DData:
         # Select the camera.
         joints = "random" if self.randomize_joints else None
         camera_xyz = "random" if self.randomize_camera else None
 
-        data = self._dataset.get(obj_id=obj_id, joints=joints, camera_xyz=camera_xyz)
+        rng = np.random.default_rng(seed)
+        seed1, seed2 = rng.bit_generator._seed_seq.spawn(2)  # type: ignore
+
+        data = self._dataset.get(
+            obj_id=obj_id, joints=joints, camera_xyz=camera_xyz, seed=seed1  # type: ignore
+        )
         pos = data["pos"]
 
         # Compute the flow.
@@ -122,7 +122,8 @@ class Flowbot3DDataset:
         mask = (~(np.isclose(flow, 0.0)).all(axis=-1)).astype(np.bool8)
 
         if self.n_points:
-            ixs = np.random.permutation(range(len(pos)))[: self.n_points]
+            rng = np.random.default_rng(seed2)
+            ixs = rng.permutation(range(len(pos)))[: self.n_points]
             pos = pos[ixs]
             flow = flow[ixs]
             mask = mask[ixs]
@@ -133,6 +134,10 @@ class Flowbot3DDataset:
             "flow": flow,
             "mask": mask,
         }
+
+    def __getitem__(self, item: int) -> Flowbot3DData:
+        obj_id = self._dataset._ids[item]
+        return self.get_data(obj_id)
 
     def __len__(self):
         return len(self._dataset)
