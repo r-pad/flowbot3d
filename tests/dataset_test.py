@@ -57,7 +57,7 @@ def test_parallel_sampling():
                 randomize_camera=True,
                 n_points=1000,
             ),
-            sample_keys=[("7179",), ("100809",)],
+            data_keys=[("7179",), ("100809",)],
             root=tmpdir,
             processed_dirname="processed_test",
             n_repeat=5,
