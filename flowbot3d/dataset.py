@@ -11,7 +11,7 @@ class Flowbot3DData(TypedDict):
     id: str
     pos: npt.NDArray[np.float32]  # (N, 3): Point cloud observation.
     flow: npt.NDArray[np.float32]  # (N, 3): Ground-truth flow.
-    mask: npt.NDArray[np.bool8]  #  (N,): Mask the point of interest.
+    mask: npt.NDArray[np.bool_]  #  (N,): Mask the point of interest.
 
 
 def compute_normalized_flow(
