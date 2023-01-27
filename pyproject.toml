@@ -10,6 +10,7 @@ authors = [
 ]
 dependencies = [
   "numpy >= 1.22.4",
+  "pandas",
   "pytorch-lightning >= 1.6.4",
   "rpad-partnet-mobility-utils[pybullet] @ git+https://github.com/r-pad/partnet_mobility_utils",
   "rpad-pyg @ git+https://github.com/r-pad/pyg_libs",
@@ -21,6 +22,7 @@ dependencies = [
   "torch-cluster >= 1.6.0",
   "torch-spline-conv >= 1.2.1",
   "torch-geometric >= 2.0",
+  "tqdm",
   "wandb",
 ]
 
@@ -42,6 +44,7 @@ develop = [
   "pre-commit",
   "pylint",
   "pytest",
+  "types-tqdm",
 ]
 build_docs = [
   "mkdocs-material",
@@ -65,5 +68,6 @@ warn_unused_configs = true
 module = [
   "torch_geometric.*",
   "plotly.*",
+  "pandas.*",
 ]
 ignore_missing_imports = true
