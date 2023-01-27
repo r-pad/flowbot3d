@@ -1,10 +1,9 @@
 import typing
 from dataclasses import dataclass
-from typing import Dict, Union
+from typing import Dict
 
 import plotly.graph_objects as go
 import pytorch_lightning as pl
-import rpad.pyg.nets.dgcnn as pnd
 import rpad.pyg.nets.pointnet2 as pnp
 import rpad.visualize_3d.plots as v3p
 import torch
@@ -12,8 +11,6 @@ import torch.optim as opt
 import torch_geometric.data as tgd
 from plotly.subplots import make_subplots
 from torch_geometric.data import Batch, Data
-
-DenseParams = Union[pnp.PN2DenseParams, pnd.DGCNNDenseParams]
 
 
 def flow_metrics(pred_flow, gt_flow):
@@ -35,66 +32,55 @@ def flow_metrics(pred_flow, gt_flow):
 def artflownet_loss(
     f_pred: torch.Tensor,
     f_target: torch.Tensor,
-    mask: torch.Tensor,
     n_nodes: torch.Tensor,
-    use_mask=False,
 ) -> torch.Tensor:
     """Maniskill loss.
 
     Args:
         f_pred (torch.Tensor): Predicted flow.
         f_target (torch.Tensor): Target flow.
-        mask (torch.Tensor): only mask
         n_nodes (torch.Tensor): A list describing the number of nodes
-        use_mask: Whether or not to compute loss over all points, or just some.
 
     Returns:
         Loss
     """
-    weights = (1 / n_nodes).repeat_interleave(n_nodes)
-
-    if use_mask:
-        f_pred = f_pred[mask]
-        f_target = f_target[mask]
-        weights = weights[mask]
 
     # Flow loss, per-point.
     raw_se = ((f_pred - f_target) ** 2).sum(dim=1)
-    # weight each PC equally in the sum.
+
+    # Compute a per-point weighting, so that each point clouQd in a batch
+    # is weighted the same. i.e. so that if one point cloud has 1000 points,
+    # and another point cloud has 15 points, the loss from each point cloud
+    # is equal (by weighting each point's contribution to the loss).
+    weights = (1 / n_nodes).repeat_interleave(n_nodes)
     l_se = (raw_se * weights).sum()
 
-    # Full loss.
+    # Full loss, aberaged across the batch.
     loss: torch.Tensor = l_se / len(n_nodes)
 
     return loss
 
 
-def create_flownet(
-    in_channels=0, out_channels=3, p: DenseParams = pnp.PN2DenseParams()
-) -> Union[pnp.PN2Dense, pnd.DGCNNDense]:
-    if isinstance(p, pnp.PN2DenseParams):
-        return pnp.PN2Dense(in_channels, out_channels, p)
-    elif isinstance(p, pnd.DGCNNDenseParams):
-        return pnd.DGCNNDense(in_channels, out_channels, p)
-    else:
-        raise ValueError(f"invalid model type: {type(p)}")
-
-
 @dataclass
 class ArtFlowNetParams:
-    net: DenseParams = pnp.PN2DenseParams()
-    mask_output_flow: bool = False
+    net: pnp.PN2DenseParams = pnp.PN2DenseParams()
+    mask_input_channel: bool = False
 
 
 class ArtFlowNet(pl.LightningModule):
-    def __init__(self, p: ArtFlowNetParams = ArtFlowNetParams(), lr=0.0001):
+    def __init__(
+        self,
+        p: ArtFlowNetParams = ArtFlowNetParams(),
+        lr=0.0001,
+    ):
         super().__init__()
         self.save_hyperparameters()
         self.params = p
         self.lr = lr
 
         # The network is just this dense backbone.
-        self.flownet = create_flownet(0, 3, p.net)
+        mask_channel = 1 if p.mask_input_channel else 0
+        self.flownet = pnp.PN2Dense(in_channels=mask_channel, out_channels=3, p=p.net)
 
     def predict(self, xyz: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Predict the flow for a single object. The point cloud should
@@ -112,7 +98,6 @@ class ArtFlowNet(pl.LightningModule):
         assert len(mask.shape) == 1
 
         data = Data(pos=xyz, mask=mask)
-        # data = Data(pos=xyz, x=mask)
         batch = Batch.from_data_list([data])
         batch = batch.to(self.device)
         self.eval()
@@ -121,22 +106,26 @@ class ArtFlowNet(pl.LightningModule):
         return flow
 
     def forward(self, data) -> torch.Tensor:  # type: ignore
+        # Maybe add the mask as an input to the network.
+        if self.params.mask_input_channel:
+            data.x = data.mask.reshape(len(data.mask), 1)
+
+        # Run the model.
         flow = typing.cast(torch.Tensor, self.flownet(data))
-        # Since we're given the mask at input, we can zero it out.
-        if self.params.mask_output_flow:
-            flow[~data.mask] = 0.0
 
         return flow
 
     def _step(self, batch: tgd.Batch, mode):
-
-        n_nodes = torch.as_tensor([d.num_nodes for d in batch.to_data_list()]).to(self.device)  # type: ignore
-
-        f_ix = batch.mask.bool()
-        # batch.x = batch.mask
+        # Make a prediction.
         f_pred = self(batch)
+
+        # Compute the loss.
+        n_nodes = torch.as_tensor([d.num_nodes for d in batch.to_data_list()]).to(self.device)  # type: ignore
+        f_ix = batch.mask.bool()
         f_target = batch.flow
-        loss = artflownet_loss(f_pred, f_target, batch.mask, n_nodes)
+        loss = artflownet_loss(f_pred, f_target, n_nodes)
+
+        # Compute some metrics on flow-only regions.
         rmse, cos_dist, mag_error = flow_metrics(f_pred[f_ix], f_target[f_ix])
 
         self.log_dict(

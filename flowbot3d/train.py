@@ -14,19 +14,27 @@ import torch_geometric.loader as tgl
 import typer
 from rpad.pyg.dataset import CachedByKeyDataset
 
-from flowbot3d.models.flowbot3d import ArtFlowNet
+from flowbot3d.models.flowbot3d import ArtFlowNet, ArtFlowNetParams
 from flowbot3d.tg_dataset import Flowbot3DTGDataset
 
 
-def create_model(model: str, lr: float) -> pl.LightningModule:
+def create_model(
+    model: str, lr: float, mask_input_channel: bool = True
+) -> pl.LightningModule:
     if model == "flowbot":
-        return ArtFlowNet(lr=lr)
+        return ArtFlowNet(
+            p=ArtFlowNetParams(mask_input_channel=mask_input_channel),
+            lr=lr,
+        )
     else:
         raise ValueError(f"bad model: {model}")
 
 
 def create_datasets(
-    root: Path, dataset: str, n_proc=-1
+    root: Path,
+    dataset: str,
+    n_proc=-1,
+    randomize_camera: bool = True,
 ) -> Tuple[tgd.Dataset, tgd.Dataset, tgd.Dataset]:
     if dataset == "umpnet":
         train_dset = CachedByKeyDataset(
@@ -34,10 +42,14 @@ def create_datasets(
             dset_kwargs=dict(
                 root=root / "raw",
                 split="umpnet-train-train",
+                randomize_camera=randomize_camera,
             ),
             data_keys=rpd.UMPNET_TRAIN_TRAIN_OBJ_IDS,
             root=root,
-            processed_dirname=Flowbot3DTGDataset.get_processed_dir(True, True),
+            processed_dirname=Flowbot3DTGDataset.get_processed_dir(
+                True,
+                randomize_camera,
+            ),
             n_repeat=100,
             n_proc=n_proc,
         )
@@ -47,10 +59,14 @@ def create_datasets(
             dset_kwargs=dict(
                 root=root / "raw",
                 split="umpnet-train-test",
+                randomize_camera=randomize_camera,
             ),
             data_keys=rpd.UMPNET_TRAIN_TEST_OBJ_IDS,
             root=root,
-            processed_dirname=Flowbot3DTGDataset.get_processed_dir(True, True),
+            processed_dirname=Flowbot3DTGDataset.get_processed_dir(
+                True,
+                randomize_camera,
+            ),
             n_repeat=1,
             n_proc=n_proc,
         )
@@ -60,10 +76,14 @@ def create_datasets(
             dset_kwargs=dict(
                 root=root / "raw",
                 split="umpnet-test",
+                randomize_camera=randomize_camera,
             ),
             data_keys=rpd.UMPNET_TEST_OBJ_IDS,
             root=root,
-            processed_dirname=Flowbot3DTGDataset.get_processed_dir(True, True),
+            processed_dirname=Flowbot3DTGDataset.get_processed_dir(
+                True,
+                randomize_camera,
+            ),
             n_repeat=1,
             n_proc=n_proc,
         )
@@ -73,10 +93,14 @@ def create_datasets(
             dset_kwargs=dict(
                 root=root / "raw",
                 split=["7179"],
+                randomize_camera=randomize_camera,
             ),
             data_keys=["7179"],
             root=root,
-            processed_dirname=Flowbot3DTGDataset.get_processed_dir(True, True),
+            processed_dirname=Flowbot3DTGDataset.get_processed_dir(
+                True,
+                randomize_camera,
+            ),
             n_repeat=1,
             n_proc=n_proc,
         )
@@ -157,6 +181,8 @@ def train(
     model_type: str = "flowbot",
     batch_size: int = 64,
     lr: float = 1e-3,
+    mask_input_channel: bool = True,
+    randomize_camera: bool = True,
     epochs: int = 100,
     n_proc: int = 100,
     log_every_n_steps: int = 5,
@@ -168,7 +194,12 @@ def train(
     pl.seed_everything(seed, workers=True)
 
     # Create the datasets.
-    train_dset, test_dset, unseen_dset = create_datasets(pm_root, dataset, n_proc)
+    train_dset, test_dset, unseen_dset = create_datasets(
+        pm_root,
+        dataset,
+        n_proc,
+        randomize_camera=randomize_camera,
+    )
 
     train_loader = tgl.DataLoader(train_dset, batch_size, shuffle=True, num_workers=0)
     test_loader = tgl.DataLoader(test_dset, batch_size, shuffle=False, num_workers=0)
@@ -177,7 +208,7 @@ def train(
     )
 
     # Create the model.
-    model = create_model(model_type, lr=lr)
+    model = create_model(model_type, lr=lr, mask_input_channel=mask_input_channel)
 
     # Create some logging.
     logger: Union[plog.WandbLogger, Literal[False]]
@@ -192,6 +223,9 @@ def train(
                 "model": model_type,
                 "batch_size": batch_size,
                 "lr": lr,
+                "mask_input_channel": mask_input_channel,
+                "randomize_camera": randomize_camera,
+                "seed": seed,
             },
         )
 
