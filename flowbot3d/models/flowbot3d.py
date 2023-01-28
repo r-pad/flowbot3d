@@ -165,15 +165,15 @@ class ArtFlowNet(pl.LightningModule):
             rows=2,
             cols=2,
             specs=[
-                [{"type": "scene"}, {"type": "table"}],
+                [{"type": "scene", "colspan": 2}, None],
                 [{"type": "scene"}, {"type": "scene"}],
             ],
             subplot_titles=(
                 "input data",
-                "N/A",
                 "target flow",
                 "pred flow",
             ),
+            vertical_spacing=0.05,
         )
 
         # Parent/child plot.
@@ -189,28 +189,24 @@ class ArtFlowNet(pl.LightningModule):
             legend=dict(x=1.0, y=0.75),
         )
 
-        # Connectedness table.
-        fig.append_trace(
-            go.Table(
-                header=dict(values=["IGNORE", "IGNORE"]),
-                cells=dict(values=[[1.0], [1.0]]),
-            ),
-            row=1,
-            col=2,
-        )
-
         # normalize the flow for visualization.
         n_f_gt = (f_target / f_target.norm(dim=1).max()).numpy()
         n_f_pred = (f_pred / f_target.norm(dim=1).max()).numpy()
 
         # GT flow.
-        fig.add_trace(v3p.pointcloud(pos, downsample=1, scene="scene2"), row=2, col=1)
-        fig.add_traces(v3p._flow_traces(pos, n_f_gt, scene="scene2"), rows=2, cols=1)
+        fig.add_trace(v3p.pointcloud(pos, 1, scene="scene2", name="pts"), row=2, col=1)
+        f_gt_traces = v3p._flow_traces(
+            pos, n_f_gt, scene="scene2", name="f_gt", legendgroup="1"
+        )
+        fig.add_traces(f_gt_traces, rows=2, cols=1)
         fig.update_layout(scene2=v3p._3d_scene(pos))
 
         # Predicted flow.
-        fig.add_trace(v3p.pointcloud(pos, downsample=1, scene="scene3"), row=2, col=2)
-        fig.add_traces(v3p._flow_traces(pos, n_f_pred, scene="scene3"), rows=2, cols=2)
+        fig.add_trace(v3p.pointcloud(pos, 1, scene="scene3", name="pts"), row=2, col=2)
+        f_pred_traces = v3p._flow_traces(
+            pos, n_f_pred, scene="scene3", name="f_pred", legendgroup="2"
+        )
+        fig.add_traces(f_pred_traces, rows=2, cols=2)
         fig.update_layout(scene3=v3p._3d_scene(pos))
 
         fig.update_layout(title=f"Object {obj_id}")

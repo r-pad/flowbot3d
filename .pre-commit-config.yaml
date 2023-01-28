@@ -10,11 +10,12 @@ repos:
         exclude: "tests/testdata/"
     -   id: check-yaml
     -   id: check-added-large-files
-        args: ['--maxkb=5000']
+        args: ['--maxkb=10000']
 -   repo: https://github.com/kynan/nbstripout
     rev: 0.4.0
     hooks:
     -   id: nbstripout
+        exclude: "notebooks/flowbot_predictions.ipynb"
 -   repo: https://github.com/myint/autoflake
     rev: v1.4
     hooks:
