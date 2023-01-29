@@ -8,10 +8,9 @@ import sapien
 from mani_skill.env.open_cabinet_door_drawer import OpenCabinetEnvBase
 from mani_skill.utils.config_parser import process_variables, process_variants
 from mani_skill.utils.misc import get_actor_state, get_pad_articulation_state
+from rpad.partnet_mobility_utils.articulate import articulate_points
+from rpad.partnet_mobility_utils.urdf import PMTree
 from sapien.core import Articulation, Pose
-
-from flowbot3d.datasets.calc_art import compute_new_points
-from flowbot3d.datasets.pm.pm_raw import parse_urdf_from_string
 
 _this_file = pathlib.Path(__file__).resolve()
 
@@ -36,7 +35,7 @@ class OpenCabinetDoorGripperEnv(OpenCabinetEnvBase):
         org_config = np.zeros(len(chain))
         target_config = np.ones(len(chain)) * magnitude
 
-        p_world_flowedpts = compute_new_points(
+        p_world_flowedpts = articulate_points(
             seg_pcd, np.eye(4), chain, org_config, target_config
         )
 
@@ -167,7 +166,7 @@ class OpenCabinetDoorGripperEnv(OpenCabinetEnvBase):
                     # Get flow
                     # urdf = parse_urdf(
                     #     "./partnet-mobility-dataset/{}/mobility.urdf".format(self.selected_id))
-                    urdf = parse_urdf_from_string(self.cabinet.export_urdf())
+                    urdf = PMTree.parse_urdf_from_string(self.cabinet.export_urdf())
                     chain = urdf.get_chain(self.target_link.name)
                     flow = self.transform_pcd(obs, self.target_link.name, chain, 0.1)
                     flow_all = {}
@@ -289,7 +288,7 @@ class OpenCabinetDrawerGripperEnv(OpenCabinetEnvBase):
         org_config = np.zeros(len(chain))
         target_config = np.ones(len(chain)) * magnitude
 
-        p_world_flowedpts = compute_new_points(
+        p_world_flowedpts = articulate_points(
             seg_pcd, np.eye(4), chain, org_config, target_config
         )
 
@@ -421,7 +420,7 @@ class OpenCabinetDrawerGripperEnv(OpenCabinetEnvBase):
                     # Get flow
                     # urdf = parse_urdf(
                     #     "./partnet-mobility-dataset/{}/mobility.urdf".format(self.selected_id))
-                    urdf = parse_urdf_from_string(self.cabinet.export_urdf())
+                    urdf = PMTree.parse_urdf_from_string(self.cabinet.export_urdf())
                     chain = urdf.get_chain(self.target_link.name)
                     flow = self.transform_pcd(obs, self.target_link.name, chain, 0.1)
                     flow_all = {}

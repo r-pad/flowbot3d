@@ -7,10 +7,9 @@ import pyransac3d as pyrsc
 import trimesh
 from mani_skill.utils.osc import OperationalSpaceControlInterface
 from pytransform3d import transformations
+from rpad.partnet_mobility_utils.articulate import articulate_points
+from rpad.partnet_mobility_utils.urdf import PMTree
 from scipy.spatial.transform import Rotation as R
-
-from flowbot3d.datasets.calc_art import compute_new_points
-from flowbot3d.datasets.pm.pm_raw import parse_urdf
 
 
 def transform_pcd(obs, chain, magnitude):
@@ -24,7 +23,7 @@ def transform_pcd(obs, chain, magnitude):
     org_config = np.zeros(len(chain))
     target_config = np.ones(len(chain)) * magnitude
 
-    p_world_flowedpts = compute_new_points(
+    p_world_flowedpts = articulate_points(
         seg_pcd, np.eye(4), chain, org_config, target_config
     )
 
@@ -226,7 +225,7 @@ def max_flow_pt_calc(env, env_name, top_k=1):
         f.write(env.cabinet.export_urdf())
         f.close()
 
-    urdf = parse_urdf("gen.urdf")
+    urdf = PMTree.parse_urdf("gen.urdf")
     chain = urdf.get_chain(env_name[-9:-3])
     _, flow_test, seg_pcd, seg_clr = transform_pcd(obs, chain, 0.3)
     flow_norm_allpts = np.linalg.norm(flow_test, axis=1)

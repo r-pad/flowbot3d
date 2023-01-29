@@ -1,6 +1,5 @@
 import os
 import shutil
-import sys
 
 import gym
 import numpy as np
@@ -10,10 +9,10 @@ from mani_skill_learn.env.env_utils import get_env_state, true_done
 from mani_skill_learn.env.replay_buffer import ReplayMemory
 from mani_skill_learn.utils.data import compress_size, flatten_dict, to_np
 from mani_skill_learn.utils.data.compression import compress_size
+from rpad.partnet_mobility_utils.articulate import articulate_points
+from rpad.partnet_mobility_utils.urdf import PMTree
 
 import flowbot3d.grasping.env  # noqa
-from flowbot3d.datasets.calc_art import compute_new_points
-from flowbot3d.datasets.pm.pm_raw import parse_urdf_from_string
 
 
 def transform_pcd(obs, chain, magnitude):
@@ -28,7 +27,7 @@ def transform_pcd(obs, chain, magnitude):
     org_config = np.zeros(len(chain))
     target_config = np.ones(len(chain)) * magnitude
 
-    p_world_flowedpts = compute_new_points(
+    p_world_flowedpts = articulate_points(
         seg_pcd, np.eye(4), chain, org_config, target_config
     )
 
@@ -41,7 +40,7 @@ def flow_w2a(flow_art, chain, magnitude):
     org_config = np.zeros(len(chain))
     target_config = np.ones(len(chain)) * magnitude
 
-    p_world_flowedpts = compute_new_points(
+    p_world_flowedpts = articulate_points(
         flow_art, np.eye(4), chain, org_config, target_config
     )
 
@@ -175,7 +174,7 @@ def vanilla_grasping_policy(
 
 def max_flow_pt_calc(env, env_name, top_k=1):
     obs = env.get_obs()
-    urdf = parse_urdf_from_string(env.cabinet.export_urdf())
+    urdf = PMTree.parse_urdf_from_string(env.cabinet.export_urdf())
     chain = urdf.get_chain(env.target_link.name)
     _, flow_test, seg_pcd, seg_clr = transform_pcd(obs, chain, 0.1)
     flow_norm_allpts = np.linalg.norm(flow_test, axis=1)
@@ -212,7 +211,7 @@ def max_flow_pt_calc(env, env_name, top_k=1):
 
 def max_flow_pt_calc_no_ransac(env, env_name, top_k=1):
     obs = env.get_obs()
-    urdf = parse_urdf_from_string(env.cabinet.export_urdf())
+    urdf = PMTree.parse_urdf_from_string(env.cabinet.export_urdf())
     chain = urdf.get_chain(env.target_link.name)
     _, flow_test, seg_pcd, seg_clr = transform_pcd(obs, chain, 0.1)
     flow_norm_allpts = np.linalg.norm(flow_test, axis=1)

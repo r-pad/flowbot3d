@@ -1,16 +1,15 @@
 import math
 import os
-import sys
 
 import gym
 import numpy as np
 import pybullet as p
+from rpad.partnet_mobility_utils.articulate import articulate_points
+from rpad.partnet_mobility_utils.urdf import PMTree
 from sapien.core import Pose
 from scipy.spatial.transform import Rotation as R
 
 import flowbot3d.grasping.env  # noqa
-from flowbot3d.datasets.calc_art import compute_new_points
-from flowbot3d.datasets.pm.pm_raw import parse_urdf_from_string
 
 
 def transform_pcd(env, obs, chain, magnitude):
@@ -26,7 +25,7 @@ def transform_pcd(env, obs, chain, magnitude):
     org_config = np.zeros(len(chain))
     target_config = np.ones(len(chain)) * magnitude * 5
 
-    p_world_flowedpts = compute_new_points(
+    p_world_flowedpts = articulate_points(
         seg_pcd, np.eye(4), chain, org_config, target_config
     )
 
@@ -53,7 +52,7 @@ def transform_pcd_door(env, obs, chain, magnitude):
     org_config = np.zeros(len(chain))
     target_config = np.ones(len(chain)) * magnitude * 5
 
-    p_world_flowedpts = compute_new_points(
+    p_world_flowedpts = articulate_points(
         seg_pcd, np.eye(4), chain, org_config, target_config
     )
 
@@ -209,7 +208,7 @@ def vanilla_grasping_policy(
 def max_flow_pt_calc_no_ransac(env, env_name, door, top_k=1):
     obs = env.get_obs()
     # obs = process_mani_skill_base(obs, env)
-    urdf = parse_urdf_from_string(env.cabinet.export_urdf())
+    urdf = PMTree.parse_urdf_from_string(env.cabinet.export_urdf())
     chain = urdf.get_chain(env.target_link.name)
     # urdf = parse_urdf(
     #     "./partnet-mobility-dataset/{}/mobility.urdf".format(env.selected_id))
