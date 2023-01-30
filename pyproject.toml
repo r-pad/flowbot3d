@@ -9,6 +9,7 @@ authors = [
   {email = "baeisner@andrew.cmu.edu", name = "Ben Eisner"}
 ]
 dependencies = [
+  "gif",
   "gym <= 0.20.0",
   "h5py",
   "numpy <= 1.23.1",

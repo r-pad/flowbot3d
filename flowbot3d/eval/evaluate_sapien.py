@@ -10,8 +10,8 @@ from sapien.core import Pose
 from scipy.spatial.transform import Rotation as R
 
 import flowbot3d.grasping.env  # noqa
-from flowbot3d.flow_prediction.animate import FlowNetAnimation
-from flowbot3d.flow_prediction.latest_models import load_model
+from flowbot3d.models.flowbot3d import ArtFlowNet
+from flowbot3d.visualizations import FlowNetAnimation
 
 GLOBAL_PULL_VECTOR = np.array([[-1, 0, 0]])
 
@@ -371,10 +371,12 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--ajar", action="store_true")
     parser.add_argument("--cf", action="store_true")
+    parser.add_argument("--ckpt_path", type=str, required=True)
     args = parser.parse_args()
     mode = args.mode
     ajar = args.ajar
     cam_frame = args.cf
+    ckpt_path = args.ckpt_path
     result_dir = os.path.join(os.getcwd(), "umpmetric_results_master", args.model_name)
 
     # Create directories
@@ -397,11 +399,11 @@ if __name__ == "__main__":
     end_ind = args.ind_end
     model_name = args.model_name
 
-    if "no" in model_name:
-        print("NO MASK")
-        flow_model = load_model(model_name, False)
+    if "flowbot" in model_name:
+        flow_model = ArtFlowNet.load_from_checkpoint(ckpt_path)
     else:
-        flow_model = load_model(model_name, True)
+        raise NotImplementedError
+
     flow_model = flow_model.to("cuda")  # type: ignore
 
     debug = args.debug
