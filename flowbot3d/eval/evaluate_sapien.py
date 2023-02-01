@@ -149,6 +149,7 @@ def run_trial(
     else:
         dist = 1 - int(info["eval_info"]["success"])
 
+    # Put the results together.
     result_dict = {
         "normalized_distance": dist,
         "success": dist < success_threshold,

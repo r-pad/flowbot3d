@@ -7,7 +7,7 @@ import torch
 from flowbot3d.models.flowbot3d import ArtFlowNet
 from flowbot3d.visualizations import FlowNetAnimation
 
-GLOBAL_PULL_VECTOR = np.array([[-1, 0, 0]])
+DEFAULT_GLOBAL_PULL_VECTOR = np.array([[-1, 0, 0]])
 
 
 class PCAgent(abc.ABC):
@@ -38,6 +38,8 @@ class FlowBot3DAgent(PCAgent):
         self.T_pose_back = None
         self.pull_vector = None
         self.phase = None
+
+        self.global_pull_vector = DEFAULT_GLOBAL_PULL_VECTOR
 
     def reset(self, obs):
         # Detect whether the gripper is vertical?
@@ -72,7 +74,7 @@ class FlowBot3DAgent(PCAgent):
         self.pull_vector = flow_vec
 
     def get_action(self, obs):
-        action, self.phase, self.phase_counter, add_dr = self.vanilla_grasping_policy(
+        action, self.phase, self.phase_counter, add_dr = self.grasp_and_pull_policy(
             obs,
             self.w2a_max_score_pt,
             self.pull_vector,
@@ -88,7 +90,7 @@ class FlowBot3DAgent(PCAgent):
 
         return action, extras
 
-    def vanilla_grasping_policy(
+    def grasp_and_pull_policy(
         self,
         obs,
         max_flow_pt,
@@ -106,7 +108,6 @@ class FlowBot3DAgent(PCAgent):
         # Define primitives
         action = np.zeros(8)
         ee_center = 0.5 * (ee_coords[0] + ee_coords[1])
-        global GLOBAL_PULL_VECTOR
         # Phase 1: Grasp
         if phase == 1:
 
@@ -172,22 +173,22 @@ class FlowBot3DAgent(PCAgent):
                             3,
                         )
                         / np.linalg.norm(pull_vector),
-                        GLOBAL_PULL_VECTOR.reshape(
+                        self.global_pull_vector.reshape(
                             3,
                         )
-                        / (1e-7 + np.linalg.norm(GLOBAL_PULL_VECTOR)),
+                        / (1e-7 + np.linalg.norm(self.global_pull_vector)),
                     )
 
                 else:
-                    pull_vector = GLOBAL_PULL_VECTOR
+                    pull_vector = self.global_pull_vector
                     angle = 1
 
                 angle = abs(np.arccos(angle))
                 v = np.cross(
-                    GLOBAL_PULL_VECTOR.reshape(
+                    self.global_pull_vector.reshape(
                         3,
                     )
-                    / (1e-7 + np.linalg.norm(GLOBAL_PULL_VECTOR)),
+                    / (1e-7 + np.linalg.norm(self.global_pull_vector)),
                     pull_vector.reshape(
                         3,
                     )
@@ -207,7 +208,7 @@ class FlowBot3DAgent(PCAgent):
                     action[4] = 0.5 * np.sign(angle)
                 elif abs(pull_vector[0, 2]) > abs(pull_vector[0, 1]):
                     action[3] = 0.5 * np.sign(angle)
-                GLOBAL_PULL_VECTOR = pull_vector
+                self.GLOBAL_PULL_VECTOR = pull_vector
                 action[0:3] = (
                     1
                     * (aux_T[:3, :3] @ pull_vector.reshape(3, 1)).squeeze()
