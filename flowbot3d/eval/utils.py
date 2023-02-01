@@ -52,8 +52,9 @@ def _init_proc(q, proc_start, n_workers, n_proc_per_worker):
         #     f"acquired worker number {worker_num}, setting processors: {procs}",
         #     flush=True,
         # )
-
         os.sched_setaffinity(os.getpid(), procs)
+
+    torch.use_deterministic_algorithms(mode=True, warn_only=True)
     global __worker_num, __queue
     __worker_num = worker_num
     __queue = q

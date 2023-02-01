@@ -14,4 +14,23 @@ pip install -e ./third_party/ManiSkill
 pip install -e "git+https://github.com/haosulab/ManiSkill-Learn.git#egg=mani-skill-learn"
 
 pip install -e .
+```
 
+
+# Reproduce the paper.
+
+## Training models.
+
+### FlowBot3D
+
+FlowBot3D
+
+FlowBot3D w/o Mask
+
+FlowBot3D w/o Mask (+VPA)
+
+### UMP-DI
+
+### Screw Parameters
+
+### Behavior Cloning

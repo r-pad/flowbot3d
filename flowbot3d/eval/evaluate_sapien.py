@@ -3,10 +3,11 @@ import json
 import math
 import multiprocessing
 import os
-import re
-import shutil
+import sys
 import time
+from typing import Any, Dict
 
+import cv2
 import gym
 import numpy as np
 import torch
@@ -22,9 +23,40 @@ from flowbot3d.visualizations import FlowNetAnimation
 
 GLOBAL_PULL_VECTOR = np.array([[-1, 0, 0]])
 
+# These are doors which have weird convex hull issues, so grasping doesn't work.
+BAD_DOORS = {
+    "8930",
+    "9003",
+    "9016",
+    "9107",
+    "9164",
+    "9168",
+    "9386",
+    "9388",
+    "9410",
+}
+
+
+def __load_obj_id_to_category():
+    # Extract existing classes.
+    with open(os.path.join(os.getcwd(), "umpnet_data_split.json"), "r") as f:
+        data = json.load(f)
+
+    id_to_cat = {}
+    for _, category_dict in data.items():
+        for category, split_dict in category_dict.items():
+            for _, id_list in split_dict.items():
+                for id in id_list:
+                    id_to_cat[id] = category
+    return id_to_cat
+
+
+OBJ_ID_TO_CATEGORY = __load_obj_id_to_category()
+
 
 def vanilla_grasping_policy(
     env,
+    obs,
     max_flow_pt,
     pull_vector,
     phase,
@@ -37,9 +69,10 @@ def vanilla_grasping_policy(
     animation,
     cam_frame,
     device,
+    animate,
 ):
 
-    obs = env.get_obs()
+    # obs = env.get_obs()
     # Define primitives
     action = np.zeros(8)
     ee_center = 0.5 * (env.agent.get_ee_coords()[0] + env.agent.get_ee_coords()[1])
@@ -103,13 +136,14 @@ def vanilla_grasping_policy(
             dr.set_z_properties(stiffness=45000, damping=0)
             _, pull_vector = max_flow_pt_calc(
                 env,
-                env_name,
+                obs,
                 flow_model,
                 1,
                 phase_counter,
                 animation,
                 cam_frame,
                 device,
+                animate,
             )
             pull_vector = pull_vector.reshape(1, 3)
             # print("pull vec: ", pull_vector)
@@ -171,10 +205,18 @@ def vanilla_grasping_policy(
 
 
 def max_flow_pt_calc(
-    env, env_name, model, top_k, id, animation, cam_frame=False, device="cuda"
+    env,
+    obs,
+    model,
+    top_k,
+    id,
+    animation: FlowNetAnimation,
+    cam_frame=False,
+    device="cuda",
+    animate=True,
 ):
     """For the initial grasping point selection"""
-    obs = env.get_obs()
+    # obs = env.get_obs()
     ee_center = 0.5 * (env.agent.get_ee_coords()[0] + env.agent.get_ee_coords()[1])
 
     filter = np.where(obs["pointcloud"]["xyz"][:, 2] > 1e-3)
@@ -219,7 +261,7 @@ def max_flow_pt_calc(
     max_flow_pt = pcd[max_flow_idx]
     max_flow_vector = pred_flow[max_flow_idx]
     # print("max_flow: ", max_flow_vector)
-    if False:
+    if animate:
         if animation:
             temp = animation.add_trace(
                 torch.as_tensor(pcd),
@@ -247,30 +289,44 @@ def flow_grasp_weighted_sum(flow_vecs, grasp_scores):
     return weighted_sum.argmax()
 
 
-def run(
+@torch.no_grad()
+def run_trial(
     env_name,
     level,
-    save_video,
-    door,
+    animate,
+    render_rgb_video,
+    bad_convex,
     flow_model,
-    result_dir,
     animation,
     ajar,
     cam_frame,
     device,
-):
+    success_threshold=0.1,
+    max_episode_length=150,
+) -> Dict[str, Any]:
     env = gym.make(env_name)
     env.set_env_mode(obs_mode="pointcloud", reward_type="sparse")
-    env.reset(level=level)
-    # randomize_camera(env)
+    obs = env.reset(level=level)
 
-    if door:
-        # Special handling of objects with convex hull issues
+    # Special handling of objects with convex hull issues.
+    if bad_convex:
         r = R.from_euler("x", 360, degrees=True)
         rot_mat = r.as_matrix()
         r = r.as_quat()
         env.cabinet.set_root_pose(Pose(env.cabinet.get_root_pose().p, r))
 
+    # If the joint should be ajar, open it a little bit.
+    if ajar:
+        qpos = []
+        for joint in env.cabinet.get_active_joints():
+            [[lmin, lmax]] = joint.get_limits()
+            if joint.name == env.target_joint.name:
+                qpos.append(lmin + 0.2 * (lmax - lmin))
+            else:
+                qpos.append(lmin)
+        env.cabinet.set_qpos(np.array(qpos))
+
+    # Get the range, for computing normalized distance.
     for i, j in enumerate(env.cabinet.get_active_joints()):
         if j.get_child_link().name == env.target_link.name:
             q_limit = env.cabinet.get_qlimits()[i][1]
@@ -279,21 +335,12 @@ def run(
             total_qdist = abs(q_limit - qpos_init)
             break
 
-    if ajar:
-        qpos = []
-        for joint in env.cabinet.get_active_joints():
-            [[lmin, lmax]] = joint.get_limits()
-            if joint.name == env.target_joint.name:
-                qpos.append(lmin + 0.2 * (lmax - lmin))
-            # qpos.append(-1.1)
-            else:
-                qpos.append(lmin)
-        env.cabinet.set_qpos(np.array(qpos))
+    obs = env.get_obs()
 
+    # Detect whether the gripper is vertical?
     max_flow_knob_pt, flow_vec = max_flow_pt_calc(
-        env, env_name, flow_model, 1, 0, animation, cam_frame, device
+        env, obs, flow_model, 1, 0, animation, cam_frame, device, animate
     )
-
     if flow_vec is None:
         flow_vec = np.array([[0, 0, 0]])
     if abs(flow_vec[0, 2]) > abs(flow_vec[0, 1]) and abs(flow_vec[0, 2]) > abs(
@@ -302,9 +349,9 @@ def run(
         gripper_vertical = True
     else:
         gripper_vertical = False
-    # print(gripper_vertical)
 
-    pcd = env.get_obs()["pointcloud"]["xyz"]
+    # pcd = env.get_obs()["pointcloud"]["xyz"]
+    pcd = obs["pointcloud"]["xyz"]
     pcd = pcd[np.where(pcd[:, 2] > 0.1)]
     w2a_max_score_pt = max_flow_knob_pt
 
@@ -320,26 +367,18 @@ def run(
     # Pull vector as the flow direction of the largest flow vector
     pull_vector = flow_vec
 
-    video_writer = None
+    if render_rgb_video:
+        rgb_imgs = []
 
-    for i in range(150):
-        if save_video:
+    for i in range(max_episode_length):
+        if render_rgb_video:
             image = env.render(mode="color_image")["world"]["rgb"]
             image = image[..., ::-1]
-            if video_writer is None:
-                import cv2
+            rgb_imgs.append(image)
 
-                video_file = result_dir
-                video_file = os.path.join(os.getcwd(), result_dir, f"{env_name}.mp4")
-                video_writer = cv2.VideoWriter(
-                    video_file,
-                    cv2.VideoWriter_fourcc(*"mp4v"),
-                    20,
-                    (image.shape[1], image.shape[0]),
-                )
-            video_writer.write(np.uint8(image * 255))
         action, phase, phase_counter, dr = vanilla_grasping_policy(
             env,
+            obs,
             w2a_max_score_pt,
             pull_vector,
             phase,
@@ -352,6 +391,7 @@ def run(
             animation,
             cam_frame,
             device,
+            animate,
         )
         obs, reward, done, info = env.step(action)
         if dr:
@@ -370,192 +410,134 @@ def run(
                 break
     env.close()
     if not math.isnan(env.cabinet.get_qpos()[0]):
-        return norm_dist
+        dist = norm_dist
     else:
-        return 1 - int(info["eval_info"]["success"])
+        dist = 1 - int(info["eval_info"]["success"])
+
+    result_dict = {
+        "normalized_distance": dist,
+        "success": dist < success_threshold,
+    }
+
+    if render_rgb_video:
+        result_dict["rgb"] = rgb_imgs
+
+    return result_dict
 
 
-def run_single_eval(
+def set_up_and_run_trial(
     model_name,
     ckpt_path,
-    classes,
-    data,
     mode,
-    num,
-    start_ind,
-    bad_doors,
     result_dir,
     cam_frame,
     succ_res_dir,
     fail_res_dir,
-    i,
+    env_name,
     ajar,
+    device,
+    save_video=True,
+    save_animation=True,
 ):
-    # model_name = eval_args["model_name"]
-    # ckpt_path = eval_args["ckpt_path"]
-    # classes = eval_args["classes"]
-    # data = eval_args["data"]
-    # mode = eval_args["mode"]
-    # num = eval_args["num"]
-    # start_ind = eval_args["start_ind"]
-    # bad_doors = eval_args["bad_doors"]
-    # result_dir = eval_args["result_dir"]
-    # cam_frame = eval_args["cam_frame"]
-    # succ_res_dir = eval_args["succ_res_dir"]
-    # fail_res_dir = eval_args["fail_res_dir"]
-    # i = eval_args["i"]
-    # ajar = eval_args["ajar"]
 
-    # np.random.seed(61)
-    # random.seed(61)
+    # Load the model.
+    model = load_model(model_name, ckpt_path)
+    model = model.to(device)  # type: ignore
+    model.eval()
 
-    try:
+    # Get the object id and category.
+    obj_id = env_name.split("_")[1]
+    obj_cat = OBJ_ID_TO_CATEGORY[obj_id]
 
-        # os.sched_setaffinity(os.getpid(), [num % os.cpu_count()])
+    # For certain objects, we want to force the object to be ajar - this is because
+    # the collision geometries at 0-articulation are such that the simulator won't
+    # allow the agent to open things even if it's pulling in the right direction.
+    if obj_cat in {"Door", "Box", "Table", "Phone", "Bucket"}:
+        ajar = True
 
-        # device = f"cuda:{num % 2}"
-        # os.environ["CUDA_VISIBLE_DEVICES"] = f"{num % 2}"
-        device = "cuda:1"
+    # Next, we need to detect if it's a "bad door", which has nasty collision geometries.
+    bad_door = obj_id in BAD_DOORS
 
-        if "flowbot" in model_name:
-            flow_model = ArtFlowNet.load_from_checkpoint(ckpt_path)
-        else:
-            raise NotImplementedError
+    animation_module = FlowNetAnimation()
+    results = run_trial(
+        env_name=env_name,
+        level=0,
+        animate=save_animation,
+        render_rgb_video=save_video,
+        bad_convex=bad_door,
+        flow_model=model,
+        animation=animation_module,
+        ajar=ajar,
+        cam_frame=cam_frame,
+        device=device,
+    )
+    n_dist = results["normalized_distance"]
+    success = results["success"]
+    outcome_dir = succ_res_dir if success else fail_res_dir
 
-        flow_model = flow_model.to(device)  # type: ignore
-        flow_model.eval()
+    # Video.
+    if save_video:
+        rgb = results["rgb"]
 
-        i = i[:-1]
-        for cl in classes:
-            idx = [m.start() for m in re.finditer("_", i)]
-            env_id = i[idx[0] + 1 : idx[1]]
-            if env_id in data[mode][cl]["test"]:
-                temp = cl
-        if not (
-            temp != "Door"
-            and temp != "Box"
-            and temp != "Table"
-            and temp != "Phone"
-            and temp != "Bucket"
-        ):
-            ajar = True
+        # Configure video writing.
+        video_file = os.path.join(outcome_dir, f"{env_name}.mp4")
+        video_writer = cv2.VideoWriter(
+            video_file,
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            20,
+            (rgb[0].shape[1], rgb[0].shape[0]),
+        )
+        for img in rgb:
+            video_writer.write(np.uint8(img * 255))
 
-        # print("Executing task for env: ", i)
-        # print("Index: ", num + start_ind)
-        bd = False
-        for d in bad_doors:
-            if d in i:
-                bd = True
-                break
+    # Animation.
+    animated_fig = animation_module.animate()
+    if animated_fig:
+        animation_fn = os.path.join(outcome_dir, f"{env_name}.html")
+        animated_fig.write_html(animation_fn)
 
-        with torch.no_grad():
-            animation_module = FlowNetAnimation()
-            if bd:
-                succ = run(
-                    i,
-                    0,
-                    True,
-                    True,
-                    flow_model,
-                    result_dir,
-                    animation_module,
-                    ajar,
-                    cam_frame,
-                    device,
-                )
-            else:
-                succ = run(
-                    i,
-                    0,
-                    True,
-                    False,
-                    flow_model,
-                    result_dir,
-                    animation_module,
-                    ajar,
-                    cam_frame,
-                    device,
-                )
-        save_html = animation_module.animate()
-
-        if os.path.isfile(
-            os.path.join(succ_res_dir, "{}.mp4".format(i))
-        ) and os.path.isfile(os.path.join(succ_res_dir, "{}.html".format(i))):
-            print("found duplicates")
-            os.remove(os.path.join(succ_res_dir, "{}.mp4".format(i)))
-            os.remove(os.path.join(succ_res_dir, "{}.html".format(i)))
-        if os.path.isfile(
-            os.path.join(fail_res_dir, "{}.mp4".format(i))
-        ) and os.path.isfile(os.path.join(succ_res_dir, "{}.html".format(i))):
-            print("found duplicates")
-            os.remove(os.path.join(fail_res_dir, "{}.mp4".format(i)))
-            os.remove(os.path.join(fail_res_dir, "{}.html".format(i)))
-
-        if succ < 0.1:
-            if os.path.isfile(os.path.join(result_dir, "{}.mp4".format(i))):
-                shutil.move(
-                    os.path.join(result_dir, "{}.mp4".format(i)),
-                    os.path.join(succ_res_dir, "{}.mp4".format(i)),
-                )
-                if save_html:
-                    save_html.write_html(
-                        os.path.join(succ_res_dir, "{}.html".format(i))
-                    )
-        else:
-            if os.path.isfile(os.path.join(result_dir, "{}.mp4".format(i))):
-                shutil.move(
-                    os.path.join(result_dir, "{}.mp4".format(i)),
-                    os.path.join(fail_res_dir, "{}.mp4".format(i)),
-                )
-                if save_html:
-                    save_html.write_html(
-                        os.path.join(fail_res_dir, "{}.html".format(i))
-                    )
-
-        for cl in classes:
-            idx = [m.start() for m in re.finditer("_", i)]
-            env_id = i[idx[0] + 1 : idx[1]]
-            if env_id in data[mode][cl]["test"]:
-                # print("Class: ", cl)
-                # print(succ)
-                # results[cl].append(int(succ))
-                if mode == "test":
-                    res_file = open(os.path.join(result_dir, "test_test_res.txt"), "a")
-                else:
-                    res_file = open(os.path.join(result_dir, "train_test_res.txt"), "a")
-                print("{}: {}".format(cl, succ), file=res_file)
-                res_file.close()
-
-        completed = True
-    except Exception as e:
-        print(f"encountered an error: {e}")
-        completed = False
-
-    # global __worker_num, __q
-
-    # if __q:
-    #     __q.put(__worker_num)
-
-    # torch.cuda.empty_cache()
-    # gc.collect()
-
-    return completed
+    # Append results.
+    m = "test" if mode == "test" else "train"
+    results_fn = os.path.join(result_dir, f"{m}_test_res.txt")
+    with open(results_fn, "a") as f:
+        print("{}: {}".format(obj_cat, n_dist), file=f)
 
 
-# __worker_num = None
-# __q = None
+def load_model(model_name, ckpt_path):
+    if "flowbot" in model_name:
+        model = ArtFlowNet.load_from_checkpoint(ckpt_path)
+    else:
+        raise NotImplementedError
+
+    return model
 
 
-# def _init_proc(q, proc_start, n_proc):
-#     time.sleep(1)
-#     # if q.empty():
-#     #     raise ValueError("SHOULD NOT BE EMPTY")
-#     worker_num = q.get(timeout=5)
-#     os.sched_setaffinity(os.getpid(), [proc_start + worker_num % n_proc])
-#     # print(f"initialized worker {worker_num}")
-#     global __worker_num, __q
-#     __worker_num = worker_num
-#     __q = q
+def debug_single(model_name, ckpt_path, device, result_dir, ajar, cam_frame):
+    # Load a model.
+    model = load_model(model_name, ckpt_path)
+    model = model.to(device)  # type: ignore
+    model.eval()
+
+    animation_module = FlowNetAnimation()
+
+    env_name = "OpenCabinetDoorGripper_{}_link_0-v0".format("101377")
+
+    run_trial(
+        env_name=env_name,
+        level=0,
+        animate=True,
+        render_rgb_video=True,
+        bad_convex=False,
+        flow_model=model,
+        animation=animation_module,
+        ajar=ajar,
+        cam_frame=cam_frame,
+        device=device,
+    )
+
+    save_html = animation_module.animate()
+    if save_html:
+        save_html.write_html("debug.html")
 
 
 def main():
@@ -568,181 +550,95 @@ def main():
     parser.add_argument("--ajar", action="store_true")
     parser.add_argument("--cf", action="store_true")
     parser.add_argument("--ckpt_path", type=str, required=True)
-    parser.add_argument("--use_multi", action="store_true")
     parser.add_argument("--proc_start", type=int, default=0)
-    parser.add_argument("--n_worker", type=int, default=30)
+    parser.add_argument("--n_workers", type=int, default=30)
     parser.add_argument("--n_proc_per_worker", type=int, default=1)
+    parser.add_argument("--no_video", action="store_false")
+    parser.add_argument("--no_animation", action="store_false")
 
     args = parser.parse_args()
     mode = args.mode
     ajar = args.ajar
     cam_frame = args.cf
     ckpt_path = args.ckpt_path
-    use_multi = args.use_multi
     proc_start = args.proc_start
-    n_worker = args.n_worker
+    n_workers = args.n_workers
     n_proc_per_worker = args.n_proc_per_worker
     result_dir = os.path.join(os.getcwd(), "umpmetric_results_master", args.model_name)
+    start_ind = args.ind_start
+    end_ind = args.ind_end
+    model_name = args.model_name
+    debug = args.debug
 
     seed = 12345
+    save_video = args.no_video
+    save_animation = args.no_animation
 
-    # Create directories
-    if not os.path.exists(result_dir):
-        print("Creating result directory")
-        os.makedirs(result_dir, exist_ok=True)
-        os.makedirs(os.path.join(result_dir, "succ"), exist_ok=True)
-        os.makedirs(os.path.join(result_dir, "fail"), exist_ok=True)
-        os.makedirs(os.path.join(result_dir, "succ_unseen"), exist_ok=True)
-        os.makedirs(os.path.join(result_dir, "fail_unseen"), exist_ok=True)
-        print("Directory created")
+    device = "cuda:1"
+
+    # If we're just debugging a single example, short-circuit the rest..
+    if debug:
+        debug_single(model_name, ckpt_path, device, result_dir, ajar, cam_frame)
+        sys.exit(0)
+
+    # Create results directories.
     if mode == "train":
         succ_res_dir = os.path.join(result_dir, "succ")
         fail_res_dir = os.path.join(result_dir, "fail")
     else:
         succ_res_dir = os.path.join(result_dir, "succ_unseen")
         fail_res_dir = os.path.join(result_dir, "fail_unseen")
+    if not os.path.exists(result_dir):
+        print("Creating result directory")
+        os.makedirs(result_dir, exist_ok=True)
+        os.makedirs(succ_res_dir, exist_ok=True)
+        os.makedirs(fail_res_dir, exist_ok=True)
+        print("Directory created")
 
-    start_ind = args.ind_start
-    end_ind = args.ind_end
-    model_name = args.model_name
+    # Get the envs.
+    umpnet_split_fn = os.path.join(
+        os.getcwd(), "umpnet_obj_splits", f"{mode}_test_split.txt"
+    )
+    with open(umpnet_split_fn, "r") as file:
+        # Get all the environments, and lop off the last newline.
+        available_envs = file.read().split("\n")[:-1]
 
-    debug = args.debug
+    start = time.perf_counter()
 
-    if debug:
-        animation_module = FlowNetAnimation()
-
-        if "flowbot" in model_name:
-            flow_model = ArtFlowNet.load_from_checkpoint(ckpt_path)
-        else:
-            raise NotImplementedError
-
-        flow_model = flow_model.to("cuda")  # type: ignore
-        flow_model.eval()
-
-        run(
-            "OpenCabinetDoorGripper_{}_link_0-v0".format("101377"),
-            0,
-            True,
-            False,
-            flow_model,
-            result_dir,
-            animation_module,
-            ajar,
-            cam_frame,
-            "cuda",
+    # Construct inputs.
+    kwargs_list = [
+        dict(
+            model_name=model_name,
+            ckpt_path=ckpt_path,
+            mode=mode,
+            result_dir=result_dir,
+            cam_frame=cam_frame,
+            succ_res_dir=succ_res_dir,
+            fail_res_dir=fail_res_dir,
+            env_name=env_name,
+            ajar=ajar,
+            device=device,
+            save_video=save_video,
+            save_animation=save_animation,
         )
-        save_html = animation_module.animate()
-        if save_html:
-            save_html.write_html("debug.html")
-    else:
-        bad_doors = [
-            "8930",
-            "9003",
-            "9016",
-            "9107",
-            "9164",
-            "9168",
-            "9386",
-            "9388",
-            "9410",
-        ]
-        ump_split_f = open(os.path.join(os.getcwd(), "umpnet_data_split.json"))
-        data = json.load(ump_split_f)
-        classes = data[mode].keys()
-        # results = defaultdict(list)
-        file = open(
-            os.path.join(
-                os.getcwd(), "umpnet_obj_splits/{}_test_split.txt".format(mode)
-            ),
-            "r",
-        )
-        available_envs = []
-        for i in file.readlines():
-            available_envs.append(i)
+        for env_name in available_envs[start_ind:end_ind]
+    ]
 
-        start = time.perf_counter()
+    # Will either distribute the evaluation across multiple processes,
+    # or just run in a for-loop in-process (if n_workers == 0).
+    results, completeds = distributed_eval(
+        set_up_and_run_trial,
+        kwargs_list,
+        n_workers=n_workers,
+        n_proc_per_worker=n_proc_per_worker,
+        proc_start=proc_start,
+        seed=seed,
+    )
 
-        if use_multi:
-            all_eval_args = [
-                dict(
-                    model_name=model_name,
-                    ckpt_path=ckpt_path,
-                    classes=list(classes),
-                    data=data,
-                    mode=mode,
-                    num=num,
-                    start_ind=start_ind,
-                    bad_doors=bad_doors,
-                    result_dir=result_dir,
-                    cam_frame=cam_frame,
-                    succ_res_dir=succ_res_dir,
-                    fail_res_dir=fail_res_dir,
-                    i=i,
-                    ajar=ajar,
-                )
-                for num, i in enumerate(available_envs[start_ind:end_ind])
-            ]
-            results, completeds = distributed_eval(
-                run_single_eval,
-                all_eval_args,
-                n_workers=n_worker,
-                n_proc_per_worker=n_proc_per_worker,
-                proc_start=proc_start,
-                seed=seed,
-            )
+    print(f"number of non-errored trials: {sum(completeds)}")
 
-            # queue = multiprocessing.Queue()
-            # for i in range(n_proc):
-            #     queue.put(i)
-
-            # successes = []
-
-            # with tqdm.tqdm(total=len(all_eval_args)) as pbar:
-            #     with cf.ProcessPoolExecutor(
-            #         max_workers=n_proc,
-            #         initializer=_init_proc,
-            #         initargs=(queue, proc_start, n_proc),
-            #         # maxtasksperchild=1,
-            #     ) as executor:
-            #         futures = [
-            #             executor.submit(run_single_eval, eval_arg)
-            #             for eval_arg in all_eval_args
-            #         ]
-            #         for future in cf.as_completed(futures):
-            #             successes.append(future.result())
-            #             pbar.update(1)
-            #         # _ = list(
-            #         #     tqdm.tqdm(
-            #         #         executor.map(run_single_eval, all_eval_args),
-            #         #         total=len(all_eval_args),
-            #         #     )
-            #         # )
-
-            print(f"number of non-errored trials: {sum(completeds)}")
-        else:
-
-            for num, i in enumerate(available_envs[start_ind:end_ind]):
-
-                run_single_eval(
-                    **dict(
-                        model_name=model_name,
-                        ckpt_path=ckpt_path,
-                        classes=classes,
-                        data=data,
-                        mode=mode,
-                        num=num,
-                        start_ind=start_ind,
-                        bad_doors=bad_doors,
-                        result_dir=result_dir,
-                        cam_frame=cam_frame,
-                        succ_res_dir=succ_res_dir,
-                        fail_res_dir=fail_res_dir,
-                        i=i,
-                        ajar=ajar,
-                    )
-                )
     end = time.perf_counter()
-    print(f"time for one episode: {end - start:.2f}s")
+    print(f"time to evaluate all episodes: {end - start:.2f}s")
 
 
 if __name__ == "__main__":
