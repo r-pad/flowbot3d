@@ -1,11 +1,8 @@
 import argparse
-import concurrent.futures as cf
-import gc
 import json
 import math
 import multiprocessing
 import os
-import random
 import re
 import shutil
 import time
@@ -13,13 +10,13 @@ import time
 import gym
 import numpy as np
 import torch
-import tqdm
 
 # from mani_skill_learn.env.observation_process import process_mani_skill_base
 from sapien.core import Pose
 from scipy.spatial.transform import Rotation as R
 
 import flowbot3d.grasping.env  # noqa
+from flowbot3d.eval.utils import distributed_eval
 from flowbot3d.models.flowbot3d import ArtFlowNet
 from flowbot3d.visualizations import FlowNetAnimation
 
@@ -378,24 +375,39 @@ def run(
         return 1 - int(info["eval_info"]["success"])
 
 
-def run_single_eval(eval_args):
-    model_name = eval_args["model_name"]
-    ckpt_path = eval_args["ckpt_path"]
-    classes = eval_args["classes"]
-    data = eval_args["data"]
-    mode = eval_args["mode"]
-    num = eval_args["num"]
-    start_ind = eval_args["start_ind"]
-    bad_doors = eval_args["bad_doors"]
-    result_dir = eval_args["result_dir"]
-    cam_frame = eval_args["cam_frame"]
-    succ_res_dir = eval_args["succ_res_dir"]
-    fail_res_dir = eval_args["fail_res_dir"]
-    i = eval_args["i"]
-    ajar = eval_args["ajar"]
+def run_single_eval(
+    model_name,
+    ckpt_path,
+    classes,
+    data,
+    mode,
+    num,
+    start_ind,
+    bad_doors,
+    result_dir,
+    cam_frame,
+    succ_res_dir,
+    fail_res_dir,
+    i,
+    ajar,
+):
+    # model_name = eval_args["model_name"]
+    # ckpt_path = eval_args["ckpt_path"]
+    # classes = eval_args["classes"]
+    # data = eval_args["data"]
+    # mode = eval_args["mode"]
+    # num = eval_args["num"]
+    # start_ind = eval_args["start_ind"]
+    # bad_doors = eval_args["bad_doors"]
+    # result_dir = eval_args["result_dir"]
+    # cam_frame = eval_args["cam_frame"]
+    # succ_res_dir = eval_args["succ_res_dir"]
+    # fail_res_dir = eval_args["fail_res_dir"]
+    # i = eval_args["i"]
+    # ajar = eval_args["ajar"]
 
-    np.random.seed(61)
-    random.seed(61)
+    # np.random.seed(61)
+    # random.seed(61)
 
     try:
 
@@ -519,31 +531,31 @@ def run_single_eval(eval_args):
         print(f"encountered an error: {e}")
         completed = False
 
-    global __worker_num, __q
+    # global __worker_num, __q
 
-    if __q:
-        __q.put(__worker_num)
+    # if __q:
+    #     __q.put(__worker_num)
 
-    torch.cuda.empty_cache()
-    gc.collect()
+    # torch.cuda.empty_cache()
+    # gc.collect()
 
     return completed
 
 
-__worker_num = None
-__q = None
+# __worker_num = None
+# __q = None
 
 
-def _init_proc(q, proc_start, n_proc):
-    time.sleep(1)
-    # if q.empty():
-    #     raise ValueError("SHOULD NOT BE EMPTY")
-    worker_num = q.get(timeout=5)
-    os.sched_setaffinity(os.getpid(), [proc_start + worker_num % n_proc])
-    # print(f"initialized worker {worker_num}")
-    global __worker_num, __q
-    __worker_num = worker_num
-    __q = q
+# def _init_proc(q, proc_start, n_proc):
+#     time.sleep(1)
+#     # if q.empty():
+#     #     raise ValueError("SHOULD NOT BE EMPTY")
+#     worker_num = q.get(timeout=5)
+#     os.sched_setaffinity(os.getpid(), [proc_start + worker_num % n_proc])
+#     # print(f"initialized worker {worker_num}")
+#     global __worker_num, __q
+#     __worker_num = worker_num
+#     __q = q
 
 
 def main():
@@ -558,7 +570,9 @@ def main():
     parser.add_argument("--ckpt_path", type=str, required=True)
     parser.add_argument("--use_multi", action="store_true")
     parser.add_argument("--proc_start", type=int, default=0)
-    parser.add_argument("--n_proc", type=int, default=30)
+    parser.add_argument("--n_worker", type=int, default=30)
+    parser.add_argument("--n_proc_per_worker", type=int, default=1)
+
     args = parser.parse_args()
     mode = args.mode
     ajar = args.ajar
@@ -566,8 +580,11 @@ def main():
     ckpt_path = args.ckpt_path
     use_multi = args.use_multi
     proc_start = args.proc_start
-    n_proc = args.n_proc
+    n_worker = args.n_worker
+    n_proc_per_worker = args.n_proc_per_worker
     result_dir = os.path.join(os.getcwd(), "umpmetric_results_master", args.model_name)
+
+    seed = 12345
 
     # Create directories
     if not os.path.exists(result_dir):
@@ -643,8 +660,6 @@ def main():
         for i in file.readlines():
             available_envs.append(i)
 
-        import time
-
         start = time.perf_counter()
 
         if use_multi:
@@ -667,41 +682,49 @@ def main():
                 )
                 for num, i in enumerate(available_envs[start_ind:end_ind])
             ]
+            results, completeds = distributed_eval(
+                run_single_eval,
+                all_eval_args,
+                n_workers=n_worker,
+                n_proc_per_worker=n_proc_per_worker,
+                proc_start=proc_start,
+                seed=seed,
+            )
 
-            queue = multiprocessing.Queue()
-            for i in range(n_proc):
-                queue.put(i)
+            # queue = multiprocessing.Queue()
+            # for i in range(n_proc):
+            #     queue.put(i)
 
-            successes = []
+            # successes = []
 
-            with tqdm.tqdm(total=len(all_eval_args)) as pbar:
-                with cf.ProcessPoolExecutor(
-                    max_workers=n_proc,
-                    initializer=_init_proc,
-                    initargs=(queue, proc_start, n_proc),
-                    # maxtasksperchild=1,
-                ) as executor:
-                    futures = [
-                        executor.submit(run_single_eval, eval_arg)
-                        for eval_arg in all_eval_args
-                    ]
-                    for future in cf.as_completed(futures):
-                        successes.append(future.result())
-                        pbar.update(1)
-                    # _ = list(
-                    #     tqdm.tqdm(
-                    #         executor.map(run_single_eval, all_eval_args),
-                    #         total=len(all_eval_args),
-                    #     )
-                    # )
+            # with tqdm.tqdm(total=len(all_eval_args)) as pbar:
+            #     with cf.ProcessPoolExecutor(
+            #         max_workers=n_proc,
+            #         initializer=_init_proc,
+            #         initargs=(queue, proc_start, n_proc),
+            #         # maxtasksperchild=1,
+            #     ) as executor:
+            #         futures = [
+            #             executor.submit(run_single_eval, eval_arg)
+            #             for eval_arg in all_eval_args
+            #         ]
+            #         for future in cf.as_completed(futures):
+            #             successes.append(future.result())
+            #             pbar.update(1)
+            #         # _ = list(
+            #         #     tqdm.tqdm(
+            #         #         executor.map(run_single_eval, all_eval_args),
+            #         #         total=len(all_eval_args),
+            #         #     )
+            #         # )
 
-            print(f"number of non-errored trials: {sum(successes)}")
+            print(f"number of non-errored trials: {sum(completeds)}")
         else:
 
             for num, i in enumerate(available_envs[start_ind:end_ind]):
 
                 run_single_eval(
-                    dict(
+                    **dict(
                         model_name=model_name,
                         ckpt_path=ckpt_path,
                         classes=classes,
