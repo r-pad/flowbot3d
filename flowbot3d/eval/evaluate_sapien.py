@@ -1,9 +1,19 @@
+import argparse
+import concurrent.futures as cf
+import gc
+import json
 import math
+import multiprocessing
 import os
+import random
+import re
+import shutil
+import time
 
 import gym
 import numpy as np
 import torch
+import tqdm
 
 # from mani_skill_learn.env.observation_process import process_mani_skill_base
 from sapien.core import Pose
@@ -29,6 +39,7 @@ def vanilla_grasping_policy(
     flow_model,
     animation,
     cam_frame,
+    device,
 ):
 
     obs = env.get_obs()
@@ -42,23 +53,23 @@ def vanilla_grasping_policy(
         delta_T = (max_flow_pt - ee_center) / np.linalg.norm(max_flow_pt - ee_center)
         # delta_R = 0.2 * R.from_matrix(T_robot_goal[:3, :3]).as_euler("xyz")
         action = np.zeros(8)
-        print(ee_center)
+        # print(ee_center)
 
         # if gripper_horizontal and env.agent.robot.get_qpos()[5] < np.pi / 2:
         if gripper_vertical and env.agent.robot.get_qpos()[3] > -np.pi / 2:
             action[3] = -1
-            print("Rotating Gripper")
+            # print("Rotating Gripper")
         if env.agent.robot.get_qpos()[5] < np.pi / 2:
             action[5] = 1
-            print("Rotating Gripper")
+            # print("Rotating Gripper")
         if not np.isclose(max_flow_pt, ee_center, atol=0.1).all():
-            print("MOVING EE")
+            # print("MOVING EE")
             action[:3] = aux_T[:3, :3] @ delta_T
-            print(action)
+            # print(action)
             vel = np.linalg.norm(env.agent.get_ee_vels().mean(axis=0))
             if vel < 1e-2:
-                print(vel)
-                print(phase_counter)
+                # print(vel)
+                # print(phase_counter)
                 if phase_counter < 10:
                     phase_counter += 1
                 else:
@@ -69,7 +80,7 @@ def vanilla_grasping_policy(
             else:
                 phase_counter = 0
         else:
-            print("EE HOLD")
+            # print("EE HOLD")
             if phase_counter >= 10:
                 phase = 2
                 phase_counter = 0
@@ -94,10 +105,17 @@ def vanilla_grasping_policy(
             dr.set_y_properties(stiffness=45000, damping=0)
             dr.set_z_properties(stiffness=45000, damping=0)
             _, pull_vector = max_flow_pt_calc(
-                env, env_name, flow_model, 1, phase_counter, animation, cam_frame
+                env,
+                env_name,
+                flow_model,
+                1,
+                phase_counter,
+                animation,
+                cam_frame,
+                device,
             )
             pull_vector = pull_vector.reshape(1, 3)
-            print("pull vec: ", pull_vector)
+            # print("pull vec: ", pull_vector)
             if pull_vector is not None:
                 angle = np.dot(
                     pull_vector.reshape(
@@ -151,11 +169,13 @@ def vanilla_grasping_policy(
         else:
             phase_counter += 1
             action[0] = 0
-        print("PHASE 3 GRASPING AND BACKING UP")
+        # print("PHASE 3 GRASPING AND BACKING UP")
         return action, phase, phase_counter, dr
 
 
-def max_flow_pt_calc(env, env_name, model, top_k, id, animation, cam_frame=False):
+def max_flow_pt_calc(
+    env, env_name, model, top_k, id, animation, cam_frame=False, device="cuda"
+):
     """For the initial grasping point selection"""
     obs = env.get_obs()
     ee_center = 0.5 * (env.agent.get_ee_coords()[0] + env.agent.get_ee_coords()[1])
@@ -182,7 +202,7 @@ def max_flow_pt_calc(env, env_name, model, top_k, id, animation, cam_frame=False
         xyz = xyz * scale
 
         pred_flow = model.predict(
-            torch.from_numpy(xyz).to("cuda"),
+            torch.from_numpy(xyz).to(device),
             torch.from_numpy(mask_1[mask_meta]).float(),
         )
         pred_flow = pred_flow.cpu().numpy()
@@ -190,7 +210,7 @@ def max_flow_pt_calc(env, env_name, model, top_k, id, animation, cam_frame=False
     else:
         cam_mat = env.cameras[1].sub_cameras[0].get_pose().to_transformation_matrix()
         pred_flow = model.predict(
-            torch.from_numpy(pcd @ cam_mat[:3, :3] + cam_mat[:3, -1]).to("cuda"),
+            torch.from_numpy(pcd @ cam_mat[:3, :3] + cam_mat[:3, -1]).to(device),
             torch.from_numpy(mask_1[mask_meta]).float(),
         )
         pred_flow = pred_flow.cpu().numpy()
@@ -201,8 +221,8 @@ def max_flow_pt_calc(env, env_name, model, top_k, id, animation, cam_frame=False
     max_flow_idx = np.argpartition(flow_norm_allpts, -top_k)[-top_k:]
     max_flow_pt = pcd[max_flow_idx]
     max_flow_vector = pred_flow[max_flow_idx]
-    print("max_flow: ", max_flow_vector)
-    if True:
+    # print("max_flow: ", max_flow_vector)
+    if False:
         if animation:
             temp = animation.add_trace(
                 torch.as_tensor(pcd),
@@ -212,7 +232,7 @@ def max_flow_pt_calc(env, env_name, model, top_k, id, animation, cam_frame=False
                 ),
                 "red",
             )
-            animation_module.append_gif_frame(temp)
+            animation.append_gif_frame(temp)
 
     return (
         max_flow_pt.reshape(
@@ -240,6 +260,7 @@ def run(
     animation,
     ajar,
     cam_frame,
+    device,
 ):
     env = gym.make(env_name)
     env.set_env_mode(obs_mode="pointcloud", reward_type="sparse")
@@ -273,7 +294,7 @@ def run(
         env.cabinet.set_qpos(np.array(qpos))
 
     max_flow_knob_pt, flow_vec = max_flow_pt_calc(
-        env, env_name, flow_model, 1, 0, animation, cam_frame
+        env, env_name, flow_model, 1, 0, animation, cam_frame, device
     )
 
     if flow_vec is None:
@@ -284,7 +305,7 @@ def run(
         gripper_vertical = True
     else:
         gripper_vertical = False
-    print(gripper_vertical)
+    # print(gripper_vertical)
 
     pcd = env.get_obs()["pointcloud"]["xyz"]
     pcd = pcd[np.where(pcd[:, 2] > 0.1)]
@@ -333,6 +354,7 @@ def run(
             flow_model,
             animation,
             cam_frame,
+            device,
         )
         obs, reward, done, info = env.step(action)
         if dr:
@@ -340,14 +362,14 @@ def run(
 
         # UMPNet Metrics
         if not math.isnan(env.cabinet.get_qpos()[0]):
-            print("curr qpos:", env.cabinet.get_qpos()[q_idx])
-            print("qlimit: ", q_limit)
+            # print("curr qpos:", env.cabinet.get_qpos()[q_idx])
+            # print("qlimit: ", q_limit)
             norm_dist = abs(q_limit - env.cabinet.get_qpos()[q_idx]) / (
                 1e-6 + total_qdist
             )
-            print("DIST: ", norm_dist)
+            # print("DIST: ", norm_dist)
             if np.isclose(norm_dist, 0.0, atol=1e-5):
-                print("SUCCESS")
+                # print("SUCCESS")
                 break
     env.close()
     if not math.isnan(env.cabinet.get_qpos()[0]):
@@ -356,13 +378,175 @@ def run(
         return 1 - int(info["eval_info"]["success"])
 
 
-if __name__ == "__main__":
-    import argparse
-    import json
-    import re
-    import shutil
-    from collections import defaultdict
+def run_single_eval(eval_args):
+    model_name = eval_args["model_name"]
+    ckpt_path = eval_args["ckpt_path"]
+    classes = eval_args["classes"]
+    data = eval_args["data"]
+    mode = eval_args["mode"]
+    num = eval_args["num"]
+    start_ind = eval_args["start_ind"]
+    bad_doors = eval_args["bad_doors"]
+    result_dir = eval_args["result_dir"]
+    cam_frame = eval_args["cam_frame"]
+    succ_res_dir = eval_args["succ_res_dir"]
+    fail_res_dir = eval_args["fail_res_dir"]
+    i = eval_args["i"]
+    ajar = eval_args["ajar"]
 
+    np.random.seed(61)
+    random.seed(61)
+
+    try:
+
+        # os.sched_setaffinity(os.getpid(), [num % os.cpu_count()])
+
+        # device = f"cuda:{num % 2}"
+        # os.environ["CUDA_VISIBLE_DEVICES"] = f"{num % 2}"
+        device = "cuda:1"
+
+        if "flowbot" in model_name:
+            flow_model = ArtFlowNet.load_from_checkpoint(ckpt_path)
+        else:
+            raise NotImplementedError
+
+        flow_model = flow_model.to(device)  # type: ignore
+        flow_model.eval()
+
+        i = i[:-1]
+        for cl in classes:
+            idx = [m.start() for m in re.finditer("_", i)]
+            env_id = i[idx[0] + 1 : idx[1]]
+            if env_id in data[mode][cl]["test"]:
+                temp = cl
+        if not (
+            temp != "Door"
+            and temp != "Box"
+            and temp != "Table"
+            and temp != "Phone"
+            and temp != "Bucket"
+        ):
+            ajar = True
+
+        # print("Executing task for env: ", i)
+        # print("Index: ", num + start_ind)
+        bd = False
+        for d in bad_doors:
+            if d in i:
+                bd = True
+                break
+
+        with torch.no_grad():
+            animation_module = FlowNetAnimation()
+            if bd:
+                succ = run(
+                    i,
+                    0,
+                    True,
+                    True,
+                    flow_model,
+                    result_dir,
+                    animation_module,
+                    ajar,
+                    cam_frame,
+                    device,
+                )
+            else:
+                succ = run(
+                    i,
+                    0,
+                    True,
+                    False,
+                    flow_model,
+                    result_dir,
+                    animation_module,
+                    ajar,
+                    cam_frame,
+                    device,
+                )
+        save_html = animation_module.animate()
+
+        if os.path.isfile(
+            os.path.join(succ_res_dir, "{}.mp4".format(i))
+        ) and os.path.isfile(os.path.join(succ_res_dir, "{}.html".format(i))):
+            print("found duplicates")
+            os.remove(os.path.join(succ_res_dir, "{}.mp4".format(i)))
+            os.remove(os.path.join(succ_res_dir, "{}.html".format(i)))
+        if os.path.isfile(
+            os.path.join(fail_res_dir, "{}.mp4".format(i))
+        ) and os.path.isfile(os.path.join(succ_res_dir, "{}.html".format(i))):
+            print("found duplicates")
+            os.remove(os.path.join(fail_res_dir, "{}.mp4".format(i)))
+            os.remove(os.path.join(fail_res_dir, "{}.html".format(i)))
+
+        if succ < 0.1:
+            if os.path.isfile(os.path.join(result_dir, "{}.mp4".format(i))):
+                shutil.move(
+                    os.path.join(result_dir, "{}.mp4".format(i)),
+                    os.path.join(succ_res_dir, "{}.mp4".format(i)),
+                )
+                if save_html:
+                    save_html.write_html(
+                        os.path.join(succ_res_dir, "{}.html".format(i))
+                    )
+        else:
+            if os.path.isfile(os.path.join(result_dir, "{}.mp4".format(i))):
+                shutil.move(
+                    os.path.join(result_dir, "{}.mp4".format(i)),
+                    os.path.join(fail_res_dir, "{}.mp4".format(i)),
+                )
+                if save_html:
+                    save_html.write_html(
+                        os.path.join(fail_res_dir, "{}.html".format(i))
+                    )
+
+        for cl in classes:
+            idx = [m.start() for m in re.finditer("_", i)]
+            env_id = i[idx[0] + 1 : idx[1]]
+            if env_id in data[mode][cl]["test"]:
+                # print("Class: ", cl)
+                # print(succ)
+                # results[cl].append(int(succ))
+                if mode == "test":
+                    res_file = open(os.path.join(result_dir, "test_test_res.txt"), "a")
+                else:
+                    res_file = open(os.path.join(result_dir, "train_test_res.txt"), "a")
+                print("{}: {}".format(cl, succ), file=res_file)
+                res_file.close()
+
+        completed = True
+    except Exception as e:
+        print(f"encountered an error: {e}")
+        completed = False
+
+    global __worker_num, __q
+
+    if __q:
+        __q.put(__worker_num)
+
+    torch.cuda.empty_cache()
+    gc.collect()
+
+    return completed
+
+
+__worker_num = None
+__q = None
+
+
+def _init_proc(q, proc_start, n_proc):
+    time.sleep(1)
+    # if q.empty():
+    #     raise ValueError("SHOULD NOT BE EMPTY")
+    worker_num = q.get(timeout=5)
+    os.sched_setaffinity(os.getpid(), [proc_start + worker_num % n_proc])
+    # print(f"initialized worker {worker_num}")
+    global __worker_num, __q
+    __worker_num = worker_num
+    __q = q
+
+
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str, default="train")
     parser.add_argument("--model_name", type=str, default="4_to_4_umpnet")
@@ -372,11 +556,17 @@ if __name__ == "__main__":
     parser.add_argument("--ajar", action="store_true")
     parser.add_argument("--cf", action="store_true")
     parser.add_argument("--ckpt_path", type=str, required=True)
+    parser.add_argument("--use_multi", action="store_true")
+    parser.add_argument("--proc_start", type=int, default=0)
+    parser.add_argument("--n_proc", type=int, default=30)
     args = parser.parse_args()
     mode = args.mode
     ajar = args.ajar
     cam_frame = args.cf
     ckpt_path = args.ckpt_path
+    use_multi = args.use_multi
+    proc_start = args.proc_start
+    n_proc = args.n_proc
     result_dir = os.path.join(os.getcwd(), "umpmetric_results_master", args.model_name)
 
     # Create directories
@@ -399,17 +589,19 @@ if __name__ == "__main__":
     end_ind = args.ind_end
     model_name = args.model_name
 
-    if "flowbot" in model_name:
-        flow_model = ArtFlowNet.load_from_checkpoint(ckpt_path)
-    else:
-        raise NotImplementedError
-
-    flow_model = flow_model.to("cuda")  # type: ignore
-
     debug = args.debug
 
     if debug:
         animation_module = FlowNetAnimation()
+
+        if "flowbot" in model_name:
+            flow_model = ArtFlowNet.load_from_checkpoint(ckpt_path)
+        else:
+            raise NotImplementedError
+
+        flow_model = flow_model.to("cuda")  # type: ignore
+        flow_model.eval()
+
         run(
             "OpenCabinetDoorGripper_{}_link_0-v0".format("101377"),
             0,
@@ -420,6 +612,7 @@ if __name__ == "__main__":
             animation_module,
             ajar,
             cam_frame,
+            "cuda",
         )
         save_html = animation_module.animate()
         if save_html:
@@ -439,7 +632,7 @@ if __name__ == "__main__":
         ump_split_f = open(os.path.join(os.getcwd(), "umpnet_data_split.json"))
         data = json.load(ump_split_f)
         classes = data[mode].keys()
-        results = defaultdict(list)
+        # results = defaultdict(list)
         file = open(
             os.path.join(
                 os.getcwd(), "umpnet_obj_splits/{}_test_split.txt".format(mode)
@@ -449,105 +642,86 @@ if __name__ == "__main__":
         available_envs = []
         for i in file.readlines():
             available_envs.append(i)
-        for num, i in enumerate(available_envs[start_ind:end_ind]):
-            i = i[:-1]
-            for cl in classes:
-                idx = [m.start() for m in re.finditer("_", i)]
-                env_id = i[idx[0] + 1 : idx[1]]
-                if env_id in data[mode][cl]["test"]:
-                    temp = cl
-            if not (
-                temp != "Door"
-                and temp != "Box"
-                and temp != "Table"
-                and temp != "Phone"
-                and temp != "Bucket"
-            ):
-                ajar = True
-            if temp != "Box":
-                continue
-            print("Executing task for env: ", i)
-            print("Index: ", num + start_ind)
-            bd = False
-            for d in bad_doors:
-                if d in i:
-                    bd = True
-                    break
-            animation_module = FlowNetAnimation()
-            if bd:
-                succ = run(
-                    i,
-                    0,
-                    True,
-                    True,
-                    flow_model,
-                    result_dir,
-                    animation_module,
-                    ajar,
-                    cam_frame,
+
+        import time
+
+        start = time.perf_counter()
+
+        if use_multi:
+            all_eval_args = [
+                dict(
+                    model_name=model_name,
+                    ckpt_path=ckpt_path,
+                    classes=list(classes),
+                    data=data,
+                    mode=mode,
+                    num=num,
+                    start_ind=start_ind,
+                    bad_doors=bad_doors,
+                    result_dir=result_dir,
+                    cam_frame=cam_frame,
+                    succ_res_dir=succ_res_dir,
+                    fail_res_dir=fail_res_dir,
+                    i=i,
+                    ajar=ajar,
                 )
-            else:
-                succ = run(
-                    i,
-                    0,
-                    True,
-                    False,
-                    flow_model,
-                    result_dir,
-                    animation_module,
-                    ajar,
-                    cam_frame,
+                for num, i in enumerate(available_envs[start_ind:end_ind])
+            ]
+
+            queue = multiprocessing.Queue()
+            for i in range(n_proc):
+                queue.put(i)
+
+            successes = []
+
+            with tqdm.tqdm(total=len(all_eval_args)) as pbar:
+                with cf.ProcessPoolExecutor(
+                    max_workers=n_proc,
+                    initializer=_init_proc,
+                    initargs=(queue, proc_start, n_proc),
+                    # maxtasksperchild=1,
+                ) as executor:
+                    futures = [
+                        executor.submit(run_single_eval, eval_arg)
+                        for eval_arg in all_eval_args
+                    ]
+                    for future in cf.as_completed(futures):
+                        successes.append(future.result())
+                        pbar.update(1)
+                    # _ = list(
+                    #     tqdm.tqdm(
+                    #         executor.map(run_single_eval, all_eval_args),
+                    #         total=len(all_eval_args),
+                    #     )
+                    # )
+
+            print(f"number of non-errored trials: {sum(successes)}")
+        else:
+
+            for num, i in enumerate(available_envs[start_ind:end_ind]):
+
+                run_single_eval(
+                    dict(
+                        model_name=model_name,
+                        ckpt_path=ckpt_path,
+                        classes=classes,
+                        data=data,
+                        mode=mode,
+                        num=num,
+                        start_ind=start_ind,
+                        bad_doors=bad_doors,
+                        result_dir=result_dir,
+                        cam_frame=cam_frame,
+                        succ_res_dir=succ_res_dir,
+                        fail_res_dir=fail_res_dir,
+                        i=i,
+                        ajar=ajar,
+                    )
                 )
-            save_html = animation_module.animate()
+    end = time.perf_counter()
+    print(f"time for one episode: {end - start:.2f}s")
 
-            if os.path.isfile(
-                os.path.join(succ_res_dir, "{}.mp4".format(i))
-            ) and os.path.isfile(os.path.join(succ_res_dir, "{}.html".format(i))):
-                print("found duplicates")
-                os.remove(os.path.join(succ_res_dir, "{}.mp4".format(i)))
-                os.remove(os.path.join(succ_res_dir, "{}.html".format(i)))
-            if os.path.isfile(
-                os.path.join(fail_res_dir, "{}.mp4".format(i))
-            ) and os.path.isfile(os.path.join(succ_res_dir, "{}.html".format(i))):
-                print("found duplicates")
-                os.remove(os.path.join(fail_res_dir, "{}.mp4".format(i)))
-                os.remove(os.path.join(fail_res_dir, "{}.html".format(i)))
 
-            if succ < 0.1:
-                if os.path.isfile(os.path.join(result_dir, "{}.mp4".format(i))):
-                    shutil.move(
-                        os.path.join(result_dir, "{}.mp4".format(i)),
-                        os.path.join(succ_res_dir, "{}.mp4".format(i)),
-                    )
-                    if save_html:
-                        save_html.write_html(
-                            os.path.join(succ_res_dir, "{}.html".format(i))
-                        )
-            else:
-                if os.path.isfile(os.path.join(result_dir, "{}.mp4".format(i))):
-                    shutil.move(
-                        os.path.join(result_dir, "{}.mp4".format(i)),
-                        os.path.join(fail_res_dir, "{}.mp4".format(i)),
-                    )
-                    if save_html:
-                        save_html.write_html(
-                            os.path.join(fail_res_dir, "{}.html".format(i))
-                        )
-
-            for cl in classes:
-                idx = [m.start() for m in re.finditer("_", i)]
-                env_id = i[idx[0] + 1 : idx[1]]
-                if env_id in data[mode][cl]["test"]:
-                    print("Class: ", cl)
-                    print(succ)
-                    results[cl].append(int(succ))
-                    if mode == "test":
-                        res_file = open(
-                            os.path.join(result_dir, "test_test_res.txt"), "a"
-                        )
-                    else:
-                        res_file = open(
-                            os.path.join(result_dir, "train_test_res.txt"), "a"
-                        )
-                    print("{}: {}".format(cl, succ), file=res_file)
-                    res_file.close()
+if __name__ == "__main__":
+    multiprocessing.set_start_method("spawn")
+    main()

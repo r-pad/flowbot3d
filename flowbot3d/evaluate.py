@@ -104,8 +104,8 @@ def run_eval(dset, model, batch_size=64) -> pd.DataFrame:
         rows, columns=["id", "category", "rmse", "cos_dist", "mag_error"]
     )
     df = raw_df.groupby("category").mean(numeric_only=True)
-    df.loc["unweighted_mean"] = raw_df.mean(numeric_only=True)
     df.loc["class_mean"] = df.mean()
+    df.loc["unweighted_mean"] = raw_df.mean(numeric_only=True)
 
     return df.T
 
