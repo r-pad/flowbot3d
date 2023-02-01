@@ -18,10 +18,9 @@ from scipy.spatial.transform import Rotation as R
 
 import flowbot3d.grasping.env  # noqa
 from flowbot3d.eval.utils import distributed_eval
-from flowbot3d.models.flowbot3d import ArtFlowNet
+from flowbot3d.grasping.agent.flowbot3d import FlowBot3DAgent, PCAgent
+from flowbot3d.grasping.env.wrappers import FlowBot3DWrapper
 from flowbot3d.visualizations import FlowNetAnimation
-
-GLOBAL_PULL_VECTOR = np.array([[-1, 0, 0]])
 
 # These are doors which have weird convex hull issues, so grasping doesn't work.
 BAD_DOORS = {
@@ -54,259 +53,21 @@ def __load_obj_id_to_category():
 OBJ_ID_TO_CATEGORY = __load_obj_id_to_category()
 
 
-def vanilla_grasping_policy(
-    env,
-    obs,
-    max_flow_pt,
-    pull_vector,
-    phase,
-    phase_counter,
-    aux_T,
-    gripper_horizontal,
-    gripper_vertical,
-    env_name,
-    flow_model,
-    animation,
-    cam_frame,
-    device,
-    animate,
-):
-
-    # obs = env.get_obs()
-    # Define primitives
-    action = np.zeros(8)
-    ee_center = 0.5 * (env.agent.get_ee_coords()[0] + env.agent.get_ee_coords()[1])
-    global GLOBAL_PULL_VECTOR
-    # Phase 1: Grasp
-    if phase == 1:
-
-        delta_T = (max_flow_pt - ee_center) / np.linalg.norm(max_flow_pt - ee_center)
-        # delta_R = 0.2 * R.from_matrix(T_robot_goal[:3, :3]).as_euler("xyz")
-        action = np.zeros(8)
-        # print(ee_center)
-
-        # if gripper_horizontal and env.agent.robot.get_qpos()[5] < np.pi / 2:
-        if gripper_vertical and env.agent.robot.get_qpos()[3] > -np.pi / 2:
-            action[3] = -1
-            # print("Rotating Gripper")
-        if env.agent.robot.get_qpos()[5] < np.pi / 2:
-            action[5] = 1
-            # print("Rotating Gripper")
-        if not np.isclose(max_flow_pt, ee_center, atol=0.1).all():
-            # print("MOVING EE")
-            action[:3] = aux_T[:3, :3] @ delta_T
-            # print(action)
-            vel = np.linalg.norm(env.agent.get_ee_vels().mean(axis=0))
-            if vel < 1e-2:
-                # print(vel)
-                # print(phase_counter)
-                if phase_counter < 10:
-                    phase_counter += 1
-                else:
-                    action[:3] = aux_T[:3, :3] @ np.array([-1, 0, 1])
-            elif phase_counter >= 1:
-                phase_counter -= 1
-                action[:3] = aux_T[:3, :3] @ np.array([-1, 0, 1])
-            else:
-                phase_counter = 0
-        else:
-            # print("EE HOLD")
-            if phase_counter >= 10:
-                phase = 2
-                phase_counter = 0
-            else:
-                if not np.isclose(max_flow_pt, ee_center).all():
-                    action[:3] = aux_T[:3, :3] @ delta_T
-                phase_counter += 1
-        return action, phase, phase_counter, None
-    # Phase 2: Back Up
-    else:
-        action = np.zeros(8)
-        dr = None
-        if phase_counter >= 10:
-            scene = env._scene
-            dr = scene.create_drive(
-                env.agent.robot.get_links()[-1],
-                env.agent.robot.get_links()[-1].get_cmass_local_pose(),
-                env.target_link,
-                env.target_link.get_cmass_local_pose(),
-            )
-            dr.set_x_properties(stiffness=45000, damping=0)
-            dr.set_y_properties(stiffness=45000, damping=0)
-            dr.set_z_properties(stiffness=45000, damping=0)
-            _, pull_vector = max_flow_pt_calc(
-                env,
-                obs,
-                flow_model,
-                1,
-                phase_counter,
-                animation,
-                cam_frame,
-                device,
-                animate,
-            )
-            pull_vector = pull_vector.reshape(1, 3)
-            # print("pull vec: ", pull_vector)
-            if pull_vector is not None:
-                angle = np.dot(
-                    pull_vector.reshape(
-                        3,
-                    )
-                    / np.linalg.norm(pull_vector),
-                    GLOBAL_PULL_VECTOR.reshape(
-                        3,
-                    )
-                    / (1e-7 + np.linalg.norm(GLOBAL_PULL_VECTOR)),
-                )
-
-            else:
-                pull_vector = GLOBAL_PULL_VECTOR
-                angle = 1
-
-            angle = abs(np.arccos(angle))
-            v = np.cross(
-                GLOBAL_PULL_VECTOR.reshape(
-                    3,
-                )
-                / (1e-7 + np.linalg.norm(GLOBAL_PULL_VECTOR)),
-                pull_vector.reshape(
-                    3,
-                )
-                / (1e-7 + np.linalg.norm(pull_vector)),
-            )
-            # v = v / np.linalg.norm(v + 1e-7)
-            if abs(pull_vector[0]).argmin() == 2:
-                vn = np.array([0, 0, 1])
-            elif abs(pull_vector[0]).argmin() == 1:
-                vn = np.array([0, 1, 0])
-            elif abs(pull_vector[0]).argmin() == 0:
-                vn = np.array([1, 0, 0])
-            if np.dot(vn, v) > 0:
-                angle = -angle
-
-            if abs(pull_vector[0, 1]) > abs(pull_vector[0, 2]):
-                action[4] = 0.5 * np.sign(angle)
-            elif abs(pull_vector[0, 2]) > abs(pull_vector[0, 1]):
-                action[3] = 0.5 * np.sign(angle)
-            GLOBAL_PULL_VECTOR = pull_vector
-            action[0:3] = (
-                1
-                * (aux_T[:3, :3] @ pull_vector.reshape(3, 1)).squeeze()
-                / np.linalg.norm(pull_vector)
-            )
-            action[3:6] += 1e-5
-            phase_counter += 1
-
-        else:
-            phase_counter += 1
-            action[0] = 0
-        # print("PHASE 3 GRASPING AND BACKING UP")
-        return action, phase, phase_counter, dr
-
-
-def max_flow_pt_calc(
-    env,
-    obs,
-    model,
-    top_k,
-    id,
-    animation: FlowNetAnimation,
-    cam_frame=False,
-    device="cuda",
-    animate=True,
-):
-    """For the initial grasping point selection"""
-    # obs = env.get_obs()
-    ee_center = 0.5 * (env.agent.get_ee_coords()[0] + env.agent.get_ee_coords()[1])
-
-    filter = np.where(obs["pointcloud"]["xyz"][:, 2] > 1e-3)
-    pcd_all = obs["pointcloud"]["xyz"][filter]
-    # this one gives the door only
-    mask_1 = obs["pointcloud"]["seg"][:, :-1].any(axis=1)[filter]
-    # This one should give everything but the door
-    mask_2 = np.logical_not(obs["pointcloud"]["seg"][:, :].any(axis=1))[filter]
-    filter_2 = np.random.permutation(np.arange(pcd_all.shape[0]))[:1200]
-    pcd_all = pcd_all[filter_2]
-    mask_1 = mask_1[filter_2]
-    mask_2 = mask_2[filter_2]
-
-    # This one should give us only the cabinet
-    mask_meta = np.logical_or(mask_1, mask_2)
-    pcd = pcd_all[mask_meta]
-    gripper_pts = pcd_all[np.logical_not(mask_meta)]
-    ee_to_pt_dist = np.linalg.norm(pcd - ee_center, axis=1)
-    if not cam_frame:
-        xyz = pcd - pcd.mean(axis=-2)
-        scale = (1 / np.abs(xyz).max()) * 0.999999
-        xyz = xyz * scale
-
-        pred_flow = model.predict(
-            torch.from_numpy(xyz).to(device),
-            torch.from_numpy(mask_1[mask_meta]).float(),
-        )
-        pred_flow = pred_flow.cpu().numpy()
-
-    else:
-        cam_mat = env.cameras[1].sub_cameras[0].get_pose().to_transformation_matrix()
-        pred_flow = model.predict(
-            torch.from_numpy(pcd @ cam_mat[:3, :3] + cam_mat[:3, -1]).to(device),
-            torch.from_numpy(mask_1[mask_meta]).float(),
-        )
-        pred_flow = pred_flow.cpu().numpy()
-        pred_flow = pred_flow @ np.linalg.inv(cam_mat)[:3, :3]
-
-    flow_norm_allpts = np.linalg.norm(pred_flow, axis=1)
-    flow_norm_allpts = np.divide(flow_norm_allpts, ee_to_pt_dist)
-    max_flow_idx = np.argpartition(flow_norm_allpts, -top_k)[-top_k:]
-    max_flow_pt = pcd[max_flow_idx]
-    max_flow_vector = pred_flow[max_flow_idx]
-    # print("max_flow: ", max_flow_vector)
-    if animate:
-        if animation:
-            temp = animation.add_trace(
-                torch.as_tensor(pcd),
-                torch.as_tensor([pcd[mask_1[mask_meta]]]),
-                torch.as_tensor(
-                    [pred_flow[mask_1[mask_meta]] / np.linalg.norm(max_flow_vector)]
-                ),
-                "red",
-            )
-            animation.append_gif_frame(temp)
-
-    return (
-        max_flow_pt.reshape(
-            3,
-        ),
-        max_flow_vector / np.linalg.norm(max_flow_vector),
-    )
-
-
-def flow_grasp_weighted_sum(flow_vecs, grasp_scores):
-    """Weighted sum of the flow magnitude and graspability score"""
-    assert flow_vecs.shape[0] == grasp_scores.shape[0]
-    flow_mags = np.array([np.linalg.norm(f) for f in flow_vecs])
-    weighted_sum = 0.2 * flow_mags / flow_mags.max() + 0.8 * grasp_scores
-    return weighted_sum.argmax()
-
-
 @torch.no_grad()
 def run_trial(
     env_name,
     level,
-    animate,
+    agent: PCAgent,
     render_rgb_video,
     bad_convex,
-    flow_model,
-    animation,
     ajar,
-    cam_frame,
-    device,
     success_threshold=0.1,
     max_episode_length=150,
 ) -> Dict[str, Any]:
     env = gym.make(env_name)
     env.set_env_mode(obs_mode="pointcloud", reward_type="sparse")
-    obs = env.reset(level=level)
+    env = FlowBot3DWrapper(env)
+    _ = env.reset(level=level)
 
     # Special handling of objects with convex hull issues.
     if bad_convex:
@@ -335,37 +96,11 @@ def run_trial(
             total_qdist = abs(q_limit - qpos_init)
             break
 
-    obs = env.get_obs()
+    # Get the initial observation, and reset the agent.
+    obs = env.observation(env.get_obs())
+    agent.reset(obs)
 
-    # Detect whether the gripper is vertical?
-    max_flow_knob_pt, flow_vec = max_flow_pt_calc(
-        env, obs, flow_model, 1, 0, animation, cam_frame, device, animate
-    )
-    if flow_vec is None:
-        flow_vec = np.array([[0, 0, 0]])
-    if abs(flow_vec[0, 2]) > abs(flow_vec[0, 1]) and abs(flow_vec[0, 2]) > abs(
-        flow_vec[0, 0]
-    ):
-        gripper_vertical = True
-    else:
-        gripper_vertical = False
-
-    # pcd = env.get_obs()["pointcloud"]["xyz"]
-    pcd = obs["pointcloud"]["xyz"]
-    pcd = pcd[np.where(pcd[:, 2] > 0.1)]
-    w2a_max_score_pt = max_flow_knob_pt
-
-    gripper_horizontal = True
-    phase = 1
-
-    # Stepping in gym
-    phase_counter = 0
-    # trans_m_w_matrix = T_m_w
-    T_org_pose = env.agent.robot.get_root_pose().to_transformation_matrix()
-    T_pose_back = np.linalg.inv(T_org_pose)
-
-    # Pull vector as the flow direction of the largest flow vector
-    pull_vector = flow_vec
+    dr = None
 
     if render_rgb_video:
         rgb_imgs = []
@@ -376,39 +111,39 @@ def run_trial(
             image = image[..., ::-1]
             rgb_imgs.append(image)
 
-        action, phase, phase_counter, dr = vanilla_grasping_policy(
-            env,
-            obs,
-            w2a_max_score_pt,
-            pull_vector,
-            phase,
-            phase_counter,
-            T_pose_back,
-            gripper_horizontal,
-            gripper_vertical,
-            env_name,
-            flow_model,
-            animation,
-            cam_frame,
-            device,
-            animate,
-        )
-        obs, reward, done, info = env.step(action)
-        if dr:
-            env._scene.remove_drive(dr)
+        # Get an action.
+        action, extras = agent.get_action(obs)
+
+        # If the policy asks, we can add a drive to the scene.
+        if "drive" in extras:
+            dr = env.env._scene.create_drive(
+                env.agent.robot.get_links()[-1],
+                env.agent.robot.get_links()[-1].get_cmass_local_pose(),
+                env.target_link,
+                env.target_link.get_cmass_local_pose(),
+            )
+            dr.set_x_properties(stiffness=45000, damping=0)
+            dr.set_y_properties(stiffness=45000, damping=0)
+            dr.set_z_properties(stiffness=45000, damping=0)
+
+        # Step the action.
+        obs, _, _, info = env.step(action)
+
+        # Remove when we're done, at every time step.
+        if "drive" in extras:
+            env.env._scene.remove_drive(dr)
+            dr = None
 
         # UMPNet Metrics
         if not math.isnan(env.cabinet.get_qpos()[0]):
-            # print("curr qpos:", env.cabinet.get_qpos()[q_idx])
-            # print("qlimit: ", q_limit)
             norm_dist = abs(q_limit - env.cabinet.get_qpos()[q_idx]) / (
                 1e-6 + total_qdist
             )
-            # print("DIST: ", norm_dist)
             if np.isclose(norm_dist, 0.0, atol=1e-5):
-                # print("SUCCESS")
                 break
     env.close()
+
+    # Extract distance metric.
     if not math.isnan(env.cabinet.get_qpos()[0]):
         dist = norm_dist
     else:
@@ -440,11 +175,6 @@ def set_up_and_run_trial(
     save_animation=True,
 ):
 
-    # Load the model.
-    model = load_model(model_name, ckpt_path)
-    model = model.to(device)  # type: ignore
-    model.eval()
-
     # Get the object id and category.
     obj_id = env_name.split("_")[1]
     obj_cat = OBJ_ID_TO_CATEGORY[obj_id]
@@ -459,18 +189,21 @@ def set_up_and_run_trial(
     bad_door = obj_id in BAD_DOORS
 
     animation_module = FlowNetAnimation()
+
+    # Create an agent.
+    agent = create_agent(
+        model_name, ckpt_path, device, animation_module, cam_frame, save_animation
+    )
+
     results = run_trial(
         env_name=env_name,
         level=0,
-        animate=save_animation,
+        agent=agent,
         render_rgb_video=save_video,
         bad_convex=bad_door,
-        flow_model=model,
-        animation=animation_module,
         ajar=ajar,
-        cam_frame=cam_frame,
-        device=device,
     )
+
     n_dist = results["normalized_distance"]
     success = results["success"]
     outcome_dir = succ_res_dir if success else fail_res_dir
@@ -503,13 +236,9 @@ def set_up_and_run_trial(
         print("{}: {}".format(obj_cat, n_dist), file=f)
 
 
-def load_model(model_name, ckpt_path):
+def create_agent(model_name, ckpt_path, device, animation, cam_frame, animate):
     if "flowbot" in model_name:
-        model = ArtFlowNet.load_from_checkpoint(ckpt_path)
-    else:
-        raise NotImplementedError
-
-    return model
+        return FlowBot3DAgent(ckpt_path, device, animation, cam_frame, animate)
 
 
 def debug_single(model_name, ckpt_path, device, result_dir, ajar, cam_frame):
