@@ -18,7 +18,7 @@ from scipy.spatial.transform import Rotation as R
 
 import flowbot3d.grasping.env  # noqa
 from flowbot3d.eval.utils import distributed_eval
-from flowbot3d.grasping.agent.flowbot3d import FlowBot3DAgent, PCAgent
+from flowbot3d.grasping.agent.grasp_pull import GraspPullAgent, PCAgent
 from flowbot3d.grasping.env.wrappers import FlowBot3DWrapper
 from flowbot3d.visualizations import FlowNetAnimation
 
@@ -239,7 +239,7 @@ def set_up_and_run_trial(
 
 def create_agent(model_name, ckpt_path, device, animation, cam_frame, animate):
     if "flowbot" in model_name:
-        return FlowBot3DAgent(ckpt_path, device, animation, cam_frame, animate)
+        return GraspPullAgent(ckpt_path, device, animation, cam_frame, animate)
 
 
 def debug_single(model_name, ckpt_path, device, result_dir, ajar, cam_frame):

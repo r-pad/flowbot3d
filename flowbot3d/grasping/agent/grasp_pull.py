@@ -20,7 +20,35 @@ class PCAgent(abc.ABC):
         pass
 
 
-class FlowBot3DAgent(PCAgent):
+class ContactDetector(abc.ABC):
+    @abc.abstractmethod
+    def detect_contact_point(self):
+        pass
+
+
+class PullDirectionDetector(abc.ABC):
+    @abc.abstractmethod
+    def choose_pull_direction(self):
+        pass
+
+
+class FlowBot3DContactDetector(ContactDetector):
+    pass
+
+
+class FlowBot3DPullDirectionDetector(PullDirectionDetector):
+    pass
+
+
+class UMPNetPullDirectionDetector(PullDirectionDetector):
+    pass
+
+
+class NormalPullDirectionDetector(PullDirectionDetector):
+    pass
+
+
+class GraspPullAgent(PCAgent):
     def __init__(
         self, ckpt_path, device, animation: FlowNetAnimation, cam_frame, animate
     ):
