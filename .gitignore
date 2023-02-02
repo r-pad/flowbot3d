@@ -376,3 +376,4 @@ imgui.ini
 umpmetric_gtflow_unseen_res.txt
 umpmetric_results_master/
 debug.html
+!flowbot3d/grasping/env/

@@ -55,7 +55,6 @@ class FlowBot3DAgent(PCAgent):
         else:
             self.gripper_vertical = False
 
-        # pcd = env.get_obs()["pointcloud"]["xyz"]
         pcd = obs["pointcloud"]["xyz"]
         pcd = pcd[np.where(pcd[:, 2] > 0.1)]
         self.w2a_max_score_pt = max_flow_knob_pt
@@ -66,7 +65,6 @@ class FlowBot3DAgent(PCAgent):
         # Stepping in gym
         self.phase_counter = 0
         # trans_m_w_matrix = T_m_w
-        # T_org_pose = env.agent.robot.get_root_pose().to_transformation_matrix()
         T_org_pose = obs["T_org_pose"]
         self.T_pose_back = np.linalg.inv(T_org_pose)
 
@@ -104,7 +102,6 @@ class FlowBot3DAgent(PCAgent):
         robot_qpos = obs["robot_qpos"]
         ee_vels = obs["ee_vels"]
 
-        # obs = env.get_obs()
         # Define primitives
         action = np.zeros(8)
         ee_center = 0.5 * (ee_coords[0] + ee_coords[1])
@@ -116,7 +113,6 @@ class FlowBot3DAgent(PCAgent):
             )
             # delta_R = 0.2 * R.from_matrix(T_robot_goal[:3, :3]).as_euler("xyz")
             action = np.zeros(8)
-            # print(ee_center)
 
             # if gripper_horizontal and robot_qpos[5] < np.pi / 2:
             if gripper_vertical and robot_qpos[3] > -np.pi / 2:
@@ -208,7 +204,7 @@ class FlowBot3DAgent(PCAgent):
                     action[4] = 0.5 * np.sign(angle)
                 elif abs(pull_vector[0, 2]) > abs(pull_vector[0, 1]):
                     action[3] = 0.5 * np.sign(angle)
-                self.GLOBAL_PULL_VECTOR = pull_vector
+                self.global_pull_vector = pull_vector
                 action[0:3] = (
                     1
                     * (aux_T[:3, :3] @ pull_vector.reshape(3, 1)).squeeze()
@@ -233,7 +229,6 @@ class FlowBot3DAgent(PCAgent):
         animate=True,
     ):
         """For the initial grasping point selection"""
-        # obs = env.get_obs()
         ee_coords = obs["ee_coords"]
         ee_center = 0.5 * (ee_coords[0] + ee_coords[1])
 
@@ -265,9 +260,6 @@ class FlowBot3DAgent(PCAgent):
             pred_flow = pred_flow.cpu().numpy()
 
         else:
-            # cam_mat = (
-            #     env.cameras[1].sub_cameras[0].get_pose().to_transformation_matrix()
-            # )
             cam_mat = obs["cam_mat"]
             pred_flow = self.model.predict(
                 torch.from_numpy(pcd @ cam_mat[:3, :3] + cam_mat[:3, -1]).to(
