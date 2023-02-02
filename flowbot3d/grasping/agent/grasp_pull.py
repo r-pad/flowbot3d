@@ -1,7 +1,8 @@
 import abc
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Protocol, Tuple
 
 import numpy as np
+import numpy.typing as npt
 import torch
 
 from flowbot3d.models.flowbot3d import ArtFlowNet
@@ -20,72 +21,181 @@ class PCAgent(abc.ABC):
         pass
 
 
-class ContactDetector(abc.ABC):
+class ContactDetector(Protocol):
     @abc.abstractmethod
-    def detect_contact_point(self):
+    def detect_contact_point(
+        self, obs
+    ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
         pass
 
 
-class PullDirectionDetector(abc.ABC):
+class PullDirectionDetector(Protocol):
     @abc.abstractmethod
-    def choose_pull_direction(self):
+    def choose_pull_direction(self, obs) -> npt.NDArray[np.float32]:
         pass
 
 
-class FlowBot3DContactDetector(ContactDetector):
-    pass
-
-
-class FlowBot3DPullDirectionDetector(PullDirectionDetector):
-    pass
-
-
-class UMPNetPullDirectionDetector(PullDirectionDetector):
-    pass
-
-
-class NormalPullDirectionDetector(PullDirectionDetector):
-    pass
-
-
-class GraspPullAgent(PCAgent):
+class FlowBot3DDetector:
     def __init__(
-        self, ckpt_path, device, animation: FlowNetAnimation, cam_frame, animate
+        self,
+        ckpt_path,
+        device,
+        cam_frame: bool,
+        animation: Optional[FlowNetAnimation] = None,
     ):
         self.model = ArtFlowNet.load_from_checkpoint(ckpt_path).to(device)
         self.model.eval()
         self.device = device
         self.animation = animation
         self.cam_frame = cam_frame
-        self.animate = animate
+
+    def detect_contact_point(
+        self, obs
+    ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+        contact_point, flow_vector = self.max_flow_point(
+            obs,
+            top_k=1,
+            animation=self.animation,
+            cam_frame=self.cam_frame,
+        )
+        return contact_point, flow_vector
+
+    def choose_pull_direction(self, obs) -> npt.NDArray[np.float32]:
+        _, flow_vector = self.max_flow_point(
+            obs,
+            top_k=1,
+            animation=self.animation,
+            cam_frame=self.cam_frame,
+        )
+        return flow_vector
+
+    def max_flow_point(
+        self,
+        obs,
+        top_k,
+        animation: Optional[FlowNetAnimation],
+        cam_frame=False,
+    ):
+        """For the initial grasping point selection"""
+        ee_coords = obs["ee_coords"]
+        ee_center = 0.5 * (ee_coords[0] + ee_coords[1])
+
+        filter = np.where(obs["pointcloud"]["xyz"][:, 2] > 1e-3)
+        pcd_all = obs["pointcloud"]["xyz"][filter]
+        # this one gives the door only
+        mask_1 = obs["pointcloud"]["seg"][:, :-1].any(axis=1)[filter]
+        # This one should give everything but the door
+        mask_2 = np.logical_not(obs["pointcloud"]["seg"][:, :].any(axis=1))[filter]
+        filter_2 = np.random.permutation(np.arange(pcd_all.shape[0]))[:1200]
+        pcd_all = pcd_all[filter_2]
+        mask_1 = mask_1[filter_2]
+        mask_2 = mask_2[filter_2]
+
+        # This one should give us only the cabinet
+        mask_meta = np.logical_or(mask_1, mask_2)
+        pcd = pcd_all[mask_meta]
+        gripper_pts = pcd_all[np.logical_not(mask_meta)]
+        ee_to_pt_dist = np.linalg.norm(pcd - ee_center, axis=1)
+        if not cam_frame:
+            xyz = pcd - pcd.mean(axis=-2)
+            scale = (1 / np.abs(xyz).max()) * 0.999999
+            xyz = xyz * scale
+
+            pred_flow = self.model.predict(
+                torch.from_numpy(xyz).to(self.device),
+                torch.from_numpy(mask_1[mask_meta]).float(),
+            )
+            pred_flow = pred_flow.cpu().numpy()
+
+        else:
+            cam_mat = obs["cam_mat"]
+            pred_flow = self.model.predict(
+                torch.from_numpy(pcd @ cam_mat[:3, :3] + cam_mat[:3, -1]).to(
+                    self.device
+                ),
+                torch.from_numpy(mask_1[mask_meta]).float(),
+            )
+            pred_flow = pred_flow.cpu().numpy()
+            pred_flow = pred_flow @ np.linalg.inv(cam_mat)[:3, :3]
+
+        flow_norm_allpts = np.linalg.norm(pred_flow, axis=1)
+        flow_norm_allpts = np.divide(flow_norm_allpts, ee_to_pt_dist)
+        max_flow_idx = np.argpartition(flow_norm_allpts, -top_k)[-top_k:]
+        max_flow_pt = pcd[max_flow_idx]
+        max_flow_vector = pred_flow[max_flow_idx]
+        if animation:
+            temp = animation.add_trace(
+                torch.as_tensor(pcd),
+                torch.as_tensor([pcd[mask_1[mask_meta]]]),
+                torch.as_tensor(
+                    [pred_flow[mask_1[mask_meta]] / np.linalg.norm(max_flow_vector)]
+                ),
+                "red",
+            )
+            animation.append_gif_frame(temp)
+
+        return (
+            max_flow_pt.reshape(
+                3,
+            ),
+            max_flow_vector / np.linalg.norm(max_flow_vector),
+        )
+
+
+class UMPNetPullDirectionDetector:
+    pass
+
+
+class NormalPullDirectionDetector:
+    pass
+
+
+class GTFlowDetector:
+    pass
+
+
+class GraspPullAgent(PCAgent):
+    def __init__(
+        self,
+        contact_detector: ContactDetector,
+        pull_dir_detector: PullDirectionDetector,
+        device,
+        animation: FlowNetAnimation,
+        cam_frame,
+    ):
+        self.device = device
+        self.animation = animation
+        self.cam_frame = cam_frame
+        self.contact_detector = contact_detector
+        self.pull_dir_detector = pull_dir_detector
 
         self.gripper_horizontal = None
         self.gripper_vertical = None
-        self.w2a_max_score_pt = None
+        self.contact_point = None
+        self.pull_vector = None
         self.phase_counter = None
         self.T_pose_back = None
-        self.pull_vector = None
         self.phase = None
 
         self.global_pull_vector = DEFAULT_GLOBAL_PULL_VECTOR
 
     def reset(self, obs):
-        # Detect whether the gripper is vertical?
-        max_flow_knob_pt, flow_vec = self.max_flow_point(
-            obs, 1, self.animation, self.cam_frame, self.animate
+        # Find the contact point.
+        contact_point, contact_pull_vector = self.contact_detector.detect_contact_point(
+            obs
         )
-        if flow_vec is None:
-            flow_vec = np.array([[0, 0, 0]])
-        if abs(flow_vec[0, 2]) > abs(flow_vec[0, 1]) and abs(flow_vec[0, 2]) > abs(
-            flow_vec[0, 0]
-        ):
+        if contact_pull_vector is None:
+            contact_pull_vector = np.array([[0, 0, 0]])
+        if abs(contact_pull_vector[0, 2]) > abs(contact_pull_vector[0, 1]) and abs(
+            contact_pull_vector[0, 2]
+        ) > abs(contact_pull_vector[0, 0]):
             self.gripper_vertical = True
         else:
             self.gripper_vertical = False
 
         pcd = obs["pointcloud"]["xyz"]
         pcd = pcd[np.where(pcd[:, 2] > 0.1)]
-        self.w2a_max_score_pt = max_flow_knob_pt
+        self.contact_point = contact_point
 
         self.gripper_horizontal = True
         self.phase = 1
@@ -97,12 +207,12 @@ class GraspPullAgent(PCAgent):
         self.T_pose_back = np.linalg.inv(T_org_pose)
 
         # Pull vector as the flow direction of the largest flow vector
-        self.pull_vector = flow_vec
+        self.pull_vector = contact_pull_vector
 
     def get_action(self, obs):
         action, self.phase, self.phase_counter, add_dr = self.grasp_and_pull_policy(
             obs,
-            self.w2a_max_score_pt,
+            self.contact_point,
             self.pull_vector,
             self.phase,
             self.phase_counter,
@@ -182,13 +292,7 @@ class GraspPullAgent(PCAgent):
             if phase_counter >= 10:
                 add_dr = True
 
-                _, pull_vector = self.max_flow_point(
-                    obs,
-                    1,
-                    self.animation,
-                    self.cam_frame,
-                    self.animate,
-                )
+                pull_vector = self.pull_dir_detector.choose_pull_direction(obs)
                 pull_vector = pull_vector.reshape(1, 3)
                 # print("pull vec: ", pull_vector)
                 if pull_vector is not None:
@@ -247,78 +351,3 @@ class GraspPullAgent(PCAgent):
                 action[0] = 0
             # print("PHASE 3 GRASPING AND BACKING UP")
             return action, phase, phase_counter, add_dr
-
-    def max_flow_point(
-        self,
-        obs,
-        top_k,
-        animation: FlowNetAnimation,
-        cam_frame=False,
-        animate=True,
-    ):
-        """For the initial grasping point selection"""
-        ee_coords = obs["ee_coords"]
-        ee_center = 0.5 * (ee_coords[0] + ee_coords[1])
-
-        filter = np.where(obs["pointcloud"]["xyz"][:, 2] > 1e-3)
-        pcd_all = obs["pointcloud"]["xyz"][filter]
-        # this one gives the door only
-        mask_1 = obs["pointcloud"]["seg"][:, :-1].any(axis=1)[filter]
-        # This one should give everything but the door
-        mask_2 = np.logical_not(obs["pointcloud"]["seg"][:, :].any(axis=1))[filter]
-        filter_2 = np.random.permutation(np.arange(pcd_all.shape[0]))[:1200]
-        pcd_all = pcd_all[filter_2]
-        mask_1 = mask_1[filter_2]
-        mask_2 = mask_2[filter_2]
-
-        # This one should give us only the cabinet
-        mask_meta = np.logical_or(mask_1, mask_2)
-        pcd = pcd_all[mask_meta]
-        gripper_pts = pcd_all[np.logical_not(mask_meta)]
-        ee_to_pt_dist = np.linalg.norm(pcd - ee_center, axis=1)
-        if not cam_frame:
-            xyz = pcd - pcd.mean(axis=-2)
-            scale = (1 / np.abs(xyz).max()) * 0.999999
-            xyz = xyz * scale
-
-            pred_flow = self.model.predict(
-                torch.from_numpy(xyz).to(self.device),
-                torch.from_numpy(mask_1[mask_meta]).float(),
-            )
-            pred_flow = pred_flow.cpu().numpy()
-
-        else:
-            cam_mat = obs["cam_mat"]
-            pred_flow = self.model.predict(
-                torch.from_numpy(pcd @ cam_mat[:3, :3] + cam_mat[:3, -1]).to(
-                    self.device
-                ),
-                torch.from_numpy(mask_1[mask_meta]).float(),
-            )
-            pred_flow = pred_flow.cpu().numpy()
-            pred_flow = pred_flow @ np.linalg.inv(cam_mat)[:3, :3]
-
-        flow_norm_allpts = np.linalg.norm(pred_flow, axis=1)
-        flow_norm_allpts = np.divide(flow_norm_allpts, ee_to_pt_dist)
-        max_flow_idx = np.argpartition(flow_norm_allpts, -top_k)[-top_k:]
-        max_flow_pt = pcd[max_flow_idx]
-        max_flow_vector = pred_flow[max_flow_idx]
-        # print("max_flow: ", max_flow_vector)
-        if animate:
-            if animation:
-                temp = animation.add_trace(
-                    torch.as_tensor(pcd),
-                    torch.as_tensor([pcd[mask_1[mask_meta]]]),
-                    torch.as_tensor(
-                        [pred_flow[mask_1[mask_meta]] / np.linalg.norm(max_flow_vector)]
-                    ),
-                    "red",
-                )
-                animation.append_gif_frame(temp)
-
-        return (
-            max_flow_pt.reshape(
-                3,
-            ),
-            max_flow_vector / np.linalg.norm(max_flow_vector),
-        )

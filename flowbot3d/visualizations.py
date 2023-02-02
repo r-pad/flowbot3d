@@ -1,8 +1,17 @@
+import abc
+from typing import Protocol
+
 import gif
 import numpy as np
 import plotly.graph_objects as go
 import rpad.visualize_3d.plots as rvpl
 import rpad.visualize_3d.primitives as rvpr
+
+
+class EpisodeAnimator(Protocol):
+    @abc.abstractmethod
+    def animate(self) -> go.Figure:
+        pass
 
 
 class FlowNetAnimation:

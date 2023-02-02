@@ -5,7 +5,8 @@ import multiprocessing
 import os
 import sys
 import time
-from typing import Any, Dict
+from ast import Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import cv2
 import gym
@@ -18,9 +19,13 @@ from scipy.spatial.transform import Rotation as R
 
 import flowbot3d.grasping.env  # noqa
 from flowbot3d.eval.utils import distributed_eval
-from flowbot3d.grasping.agent.grasp_pull import GraspPullAgent, PCAgent
+from flowbot3d.grasping.agent.grasp_pull import (
+    FlowBot3DDetector,
+    GraspPullAgent,
+    PCAgent,
+)
 from flowbot3d.grasping.env.wrappers import FlowBot3DWrapper
-from flowbot3d.visualizations import FlowNetAnimation
+from flowbot3d.visualizations import EpisodeAnimator, FlowNetAnimation
 
 # These are doors which have weird convex hull issues, so grasping doesn't work.
 BAD_DOORS = {
@@ -189,11 +194,9 @@ def set_up_and_run_trial(
     # Next, we need to detect if it's a "bad door", which has nasty collision geometries.
     bad_door = obj_id in BAD_DOORS
 
-    animation_module = FlowNetAnimation()
-
     # Create an agent.
-    agent = create_agent(
-        model_name, ckpt_path, device, animation_module, cam_frame, save_animation
+    agent, animation_module = create_agent(
+        model_name, ckpt_path, device, save_animation, cam_frame
     )
 
     results = run_trial(
@@ -225,8 +228,8 @@ def set_up_and_run_trial(
             video_writer.write(np.uint8(img * 255))
 
     # Animation.
-    animated_fig = animation_module.animate()
-    if animated_fig:
+    if animation_module:
+        animated_fig = animation_module.animate()
         animation_fn = os.path.join(outcome_dir, f"{env_name}.html")
         animated_fig.write_html(animation_fn)
 
@@ -237,9 +240,39 @@ def set_up_and_run_trial(
         print("{}: {}".format(obj_cat, n_dist), file=f)
 
 
-def create_agent(model_name, ckpt_path, device, animation, cam_frame, animate):
+def create_agent(
+    model_name, ckpt_path, device, animate, cam_frame
+) -> Tuple[PCAgent, Optional[EpisodeAnimator]]:
     if "flowbot" in model_name:
-        return GraspPullAgent(ckpt_path, device, animation, cam_frame, animate)
+        if animate:
+            animation = FlowNetAnimation()
+        else:
+            animation = None
+
+        # We use ArtFlowNet predictions to detect both contacts and pull direction.
+        detector = FlowBot3DDetector(ckpt_path, device, cam_frame, animation)
+        agent = GraspPullAgent(
+            contact_detector=detector,
+            pull_dir_detector=detector,
+            device=device,
+            animation=animation,
+            cam_frame=cam_frame,
+        )
+        return agent, animation
+    elif "normal" in model_name:
+        raise NotImplementedError()
+    elif "umpnet" in model_name:
+        raise NotImplementedError()
+    elif "screw" in model_name:
+        raise NotImplementedError()
+    elif "bc" in model_name or "dagger_e2e" in model_name:
+        raise NotImplementedError()
+    elif "dagger_oracle" in model_name:
+        raise NotImplementedError()
+    elif "gt_flow" in model_name:
+        raise NotImplementedError()
+    else:
+        raise ValueError("no agent with that name")
 
 
 def debug_single(model_name, ckpt_path, device, result_dir, ajar, cam_frame):
