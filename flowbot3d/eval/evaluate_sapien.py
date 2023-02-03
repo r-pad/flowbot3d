@@ -22,6 +22,7 @@ from flowbot3d.eval.utils import distributed_eval
 from flowbot3d.grasping.agent.grasp_pull import (
     FlowBot3DDetector,
     GraspPullAgent,
+    GTFlowDetector,
     PCAgent,
 )
 from flowbot3d.grasping.env.wrappers import FlowBot3DWrapper
@@ -196,7 +197,7 @@ def set_up_and_run_trial(
 
     # Create an agent.
     agent, animation_module = create_agent(
-        model_name, ckpt_path, device, save_animation, cam_frame
+        model_name, ckpt_path, device, save_animation, cam_frame, bad_door=bad_door
     )
 
     results = run_trial(
@@ -241,7 +242,7 @@ def set_up_and_run_trial(
 
 
 def create_agent(
-    model_name, ckpt_path, device, animate, cam_frame
+    model_name, ckpt_path, device, animate, cam_frame, bad_door
 ) -> Tuple[PCAgent, Optional[EpisodeAnimator]]:
     if "flowbot" in model_name:
         if animate:
@@ -256,7 +257,6 @@ def create_agent(
             pull_dir_detector=detector,
             device=device,
             animation=animation,
-            cam_frame=cam_frame,
         )
         return agent, animation
     elif "normal" in model_name:
@@ -270,7 +270,14 @@ def create_agent(
     elif "dagger_oracle" in model_name:
         raise NotImplementedError()
     elif "gt_flow" in model_name:
-        raise NotImplementedError()
+        detector = GTFlowDetector(bad_door)
+        agent = GraspPullAgent(
+            contact_detector=detector,
+            pull_dir_detector=detector,
+            device=device,
+            animation=None,
+        )
+        return agent, None
     else:
         raise ValueError("no agent with that name")
 
