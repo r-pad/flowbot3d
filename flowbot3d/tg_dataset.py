@@ -47,7 +47,6 @@ class Flowbot3DTGDataset(tgd.Dataset):
         return f"processed_{joint_chunk}_{camera_chunk}"
 
     def get_data(self, obj_id: str, seed=None) -> Flowbot3DTGData:
-
         data_dict = self.dataset.get_data(obj_id, seed)
 
         data = tgd.Data(

@@ -15,6 +15,7 @@ import typer
 from rpad.pyg.dataset import CachedByKeyDataset
 
 from flowbot3d.models.flowbot3d import ArtFlowNet, ArtFlowNetParams
+from flowbot3d.models.umpnet_di import UMPNet, UMPNetParams
 from flowbot3d.tg_dataset import Flowbot3DTGDataset
 
 
@@ -26,6 +27,8 @@ def create_model(
             p=ArtFlowNetParams(mask_input_channel=mask_input_channel),
             lr=lr,
         )
+    elif model == "umpnet":
+        return UMPNet(params=UMPNetParams(lr=lr))
     else:
         raise ValueError(f"bad model: {model}")
 
@@ -109,7 +112,6 @@ def create_datasets(
         unseen_dset = dset
 
     else:
-
         raise ValueError(f"bad dataset: {dataset}")
 
     return train_dset, test_dset, unseen_dset
@@ -149,7 +151,12 @@ class WandBPlotlyCallback(plc.Callback):
             pl_module.eval()
             preds = pl_module(data)
 
-        plots = pl_module.make_plots(preds.cpu(), data.cpu())
+            if isinstance(preds, tuple):
+                preds = (pred.cpu() for pred in preds)
+            else:
+                preds = preds.cpu()
+
+        plots = pl_module.make_plots(preds, data.cpu())
 
         assert trainer.logger is not None and isinstance(
             trainer.logger, plog.WandbLogger

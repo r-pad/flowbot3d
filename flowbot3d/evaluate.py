@@ -54,7 +54,6 @@ def make_model(model: str, ckpt_path: Union[str, Path]) -> pl.LightningModule:
 
 @torch.no_grad()
 def run_eval(dset, model, batch_size=64) -> pd.DataFrame:
-
     all_objs = (
         rpd.UMPNET_TRAIN_TRAIN_OBJS + rpd.UMPNET_TRAIN_TEST_OBJS + rpd.UMPNET_TEST_OBJS
     )
