@@ -24,4 +24,5 @@ class FlowBot3DWrapper(gym.ObservationWrapper):
             "robot_qpos": self.env.agent.robot.get_qpos(),
             "ee_vels": self.env.agent.get_ee_vels(),
             "chain": chain,
+            "cam_pos": self.env.cameras[1].sub_cameras[0].get_pose().p,
         }

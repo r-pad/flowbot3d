@@ -23,10 +23,11 @@ from flowbot3d.grasping.agent.grasp_pull import (
     FlowBot3DDetector,
     GraspPullAgent,
     GTFlowDetector,
+    NormalPullDirectionDetector,
     PCAgent,
 )
 from flowbot3d.grasping.env.wrappers import FlowBot3DWrapper
-from flowbot3d.visualizations import EpisodeAnimator, FlowNetAnimation
+from flowbot3d.visualizations import EpisodeAnimator, FlowNetAnimation, UMPAnimation
 
 # These are doors which have weird convex hull issues, so grasping doesn't work.
 BAD_DOORS = {
@@ -256,11 +257,21 @@ def create_agent(
             contact_detector=detector,
             pull_dir_detector=detector,
             device=device,
-            animation=animation,
         )
         return agent, animation
     elif "normal" in model_name:
-        raise NotImplementedError()
+        if animate:
+            animation = UMPAnimation()
+        else:
+            animation = None
+        contact_detector = FlowBot3DDetector(ckpt_path, device, cam_frame, animation)
+        pull_dir_detector = NormalPullDirectionDetector(animation, cam_frame)
+        agent = GraspPullAgent(
+            contact_detector=contact_detector,
+            pull_dir_detector=pull_dir_detector,
+            device=device,
+        )
+        return agent, animation
     elif "umpnet" in model_name:
         raise NotImplementedError()
     elif "screw" in model_name:
@@ -275,7 +286,6 @@ def create_agent(
             contact_detector=detector,
             pull_dir_detector=detector,
             device=device,
-            animation=None,
         )
         return agent, None
     else:

@@ -448,7 +448,7 @@ if __name__ == "__main__":
     available_envs = []
     for i in file.readlines():
         available_envs.append(i)
-    for num, i in enumerate(available_envs):
+    for num, i in enumerate(available_envs[87:]):
         i = i[:-1]
         for cl in classes:
             idx = [m.start() for m in re.finditer("_", i)]
