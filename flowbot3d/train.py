@@ -152,7 +152,7 @@ class WandBPlotlyCallback(plc.Callback):
             pl_module.eval()
             preds = pl_module(data)
 
-            if isinstance(preds, Tuple):
+            if isinstance(preds, tuple):
                 preds = (pred.cpu() for pred in preds)
             else:
                 preds = preds.cpu()
