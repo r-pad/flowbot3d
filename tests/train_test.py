@@ -66,7 +66,6 @@ def test_deterministic_training():
     # somewhere which might not be fully reproducible (aka why we put 'warn' instead of True).
     seqs = []
     for _ in range(2):
-
         pl.seed_everything(seed, workers=True)
 
         # Set up training.

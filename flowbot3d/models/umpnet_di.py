@@ -210,7 +210,6 @@ class UMPNet(pl.LightningModule):
 
     @staticmethod
     def make_plots(preds, batch: tgd.Batch) -> Dict[str, go.Figure]:
-
         data_list = batch.to_data_list()
         maxs = torch.stack([data.flow.norm(dim=-1).argmax() for data in data_list])
         flows = batch.flow[maxs]

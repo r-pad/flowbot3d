@@ -112,7 +112,6 @@ def create_datasets(
         unseen_dset = dset
 
     else:
-
         raise ValueError(f"bad dataset: {dataset}")
 
     return train_dset, test_dset, unseen_dset
