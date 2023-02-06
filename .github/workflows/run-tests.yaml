@@ -40,7 +40,7 @@ jobs:
         run: pip install "${{ inputs.install_string }}"
 
       - name: Install maniskill.
-        run: pip install ./third_party/ManiSkill
+        run: pip install -e ./third_party/ManiSkill
 
       - name: Code Quality
         run: python -m black ${{ inputs.pkgname }} tests/ --check
