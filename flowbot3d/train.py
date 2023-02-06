@@ -15,7 +15,9 @@ import typer
 from rpad.pyg.dataset import CachedByKeyDataset
 
 from flowbot3d.models.flowbot3d import ArtFlowNet, ArtFlowNetParams
+from flowbot3d.models.screwnet import ScrewNet
 from flowbot3d.models.umpnet_di import UMPNet, UMPNetParams
+from flowbot3d.screw_dataset import ScrewDataset
 from flowbot3d.tg_dataset import Flowbot3DTGDataset
 
 
@@ -29,11 +31,13 @@ def create_model(
         )
     elif model == "umpnet":
         return UMPNet(params=UMPNetParams(lr=lr))
+    elif model == "screwnet":
+        return ScrewNet(lr=lr)
     else:
         raise ValueError(f"bad model: {model}")
 
 
-def create_datasets(
+def create_flowbot_datasets(
     root: Path,
     dataset: str,
     n_proc=-1,
@@ -113,6 +117,41 @@ def create_datasets(
 
     else:
         raise ValueError(f"bad dataset: {dataset}")
+
+    return train_dset, test_dset, unseen_dset
+
+
+def create_screwnet_datasets(
+    root: Path,
+    dataset: str,
+    n_proc=-1,
+):
+    def _dset(split, n_repeat):
+        return CachedByKeyDataset(
+            dset_cls=ScrewDataset,
+            dset_kwargs=dict(
+                root=root / "raw",
+                split=split,
+            ),
+            data_keys=ScrewDataset.get_joint_list(root / "raw", split)[0],
+            root=root,
+            processed_dirname="processed_screwnet",
+            n_repeat=n_repeat,
+            n_proc=n_proc,
+            seed=12345,
+        )
+
+    if dataset == "umpnet":
+        train_dset = _dset("umpnet-train-train", n_repeat=100)
+        test_dset = _dset("umpnet-train-test", n_repeat=1)
+        unseen_dset = _dset("umpnet-test", n_repeat=1)
+
+    elif dataset == "single":
+        train_dset = _dset(["7179"], 1)
+        test_dset = train_dset
+        unseen_dset = train_dset
+    else:
+        raise ValueError(f"bad dataset {dataset}")
 
     return train_dset, test_dset, unseen_dset
 
@@ -201,12 +240,20 @@ def train(
     pl.seed_everything(seed, workers=True)
 
     # Create the datasets.
-    train_dset, test_dset, unseen_dset = create_datasets(
-        pm_root,
-        dataset,
-        n_proc,
-        randomize_camera=randomize_camera,
-    )
+    # TODO: unify the screwnet and flowbot datasets... might be difficult to do.
+    if model_type == "screwnet":
+        train_dset, test_dset, unseen_dset = create_screwnet_datasets(
+            pm_root,
+            dataset,
+            n_proc,
+        )
+    else:
+        train_dset, test_dset, unseen_dset = create_flowbot_datasets(
+            pm_root,
+            dataset,
+            n_proc,
+            randomize_camera=randomize_camera,
+        )
 
     train_loader = tgl.DataLoader(train_dset, batch_size, shuffle=True, num_workers=0)
     test_loader = tgl.DataLoader(test_dset, batch_size, shuffle=False, num_workers=0)
