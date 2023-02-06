@@ -1,0 +1,3 @@
+[submodule "third_party/ManiSkill"]
+	path = third_party/ManiSkill
+	url = https://github.com/harryzhangOG/ManiSkill.git

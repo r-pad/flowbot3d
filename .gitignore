@@ -370,3 +370,4 @@ cython_debug/
 checkpoints/
 wandb/
 results/
+*.convex.stl
