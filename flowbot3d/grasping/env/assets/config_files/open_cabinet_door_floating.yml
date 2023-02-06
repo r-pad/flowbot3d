@@ -1,0 +1,50 @@
+physics:
+  _include: "../../../../../third_party/ManiSkill/mani_skill/assets/config_files/components/physics.yml"
+render:
+  _include: "../../../../../third_party/ManiSkill/mani_skill/assets/config_files/components/default_rendering.yml"
+  $cameras_height: 1.5
+  _override:
+    cameras:
+    - name: "world"
+      position: [-1.5, 0, 1.5]
+      rotation: [0.9238795, 0, 0.3826834, 0]
+      _include: "../../../../../third_party/ManiSkill/mani_skill/assets/config_files/components/default_camera.yml"
+    # - _include: "../../../../../third_party/ManiSkill/mani_skill/assets/config_files/components/cameras_on_robot.yml"
+    - _include: "components/cameras_fixed.yml"
+layout:
+  surface_materials:
+    - name: "object_material"
+      static_friction: 1
+      dynamic_friction: 1
+      restitution: 0
+  rigid_bodies:
+    - name: "ground"
+      parts:
+        - type: "ground"
+          altitude: -0.5
+          collision: true
+          visual: false
+          surface_material: "object_material"
+          render_material: "ground"
+  articulations:
+    - name: "cabinet"
+      fix_base: true
+      position: [0,0,0]
+      rotation: [1,0,0,0]
+      surface_material: "object_material"
+      _variants:
+        type: "options"
+        global_id: "partnet_mobility_id"
+        options:
+          _include: "../../../../../third_party/ManiSkill/mani_skill/assets/config_files/cabinet_models_door.yml"
+agent:
+  _include: "robots/floating_gripper.yml"
+  _override:
+    initial_qpos: [
+      0, 0, 0,
+      0,
+      0, 0, 0,
+      0
+    ]
+custom:
+  open_extent: 0.9
