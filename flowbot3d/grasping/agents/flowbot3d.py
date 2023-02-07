@@ -8,7 +8,7 @@ import rpad.visualize_3d.plots as rvpl
 import rpad.visualize_3d.primitives as rvpr
 import torch
 
-from flowbot3d.models.flowbot3d import ArtFlowNet
+from flowbot3d.models.artflownet import ArtFlowNet
 
 
 class FlowBot3DDetector:

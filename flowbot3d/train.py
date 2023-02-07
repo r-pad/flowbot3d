@@ -14,7 +14,7 @@ import torch_geometric.loader as tgl
 import typer
 from rpad.pyg.dataset import CachedByKeyDataset
 
-from flowbot3d.models.flowbot3d import ArtFlowNet, ArtFlowNetParams
+from flowbot3d.models.artflownet import ArtFlowNet, ArtFlowNetParams
 from flowbot3d.models.screwnet import ScrewNet
 from flowbot3d.models.umpnet_di import UMPNet, UMPNetParams
 from flowbot3d.screw_dataset import ScrewDataset

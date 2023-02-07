@@ -10,7 +10,7 @@ import torch
 import torch_geometric.loader as tgl
 from rpad.pyg.dataset import CachedByKeyDataset
 
-from flowbot3d.models.flowbot3d import ArtFlowNet
+from flowbot3d.models.artflownet import ArtFlowNet
 from flowbot3d.tg_dataset import Flowbot3DTGDataset
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
