@@ -4,3 +4,6 @@
 [submodule "third_party/where2act"]
 	path = third_party/where2act
 	url = https://github.com/daerduoCarey/where2act.git
+[submodule "third_party/umpnet"]
+	path = third_party/umpnet
+	url = https://github.com/harryzhangOG/umpnet.git
