@@ -98,7 +98,7 @@ class FlowBot3DDetector:
         flow_norm_allpts = np.divide(flow_norm_allpts, ee_to_pt_dist)
         max_flow_idx = np.argpartition(flow_norm_allpts, -top_k)[-top_k:]
         max_flow_pt = pcd[max_flow_idx]
-        max_flow_vector = pred_flow[max_flow_idx]
+        max_flow_vector = pred_flow[max_flow_idx]  # type: ignore
         if animation:
             temp = animation.add_trace(
                 torch.as_tensor(pcd),
@@ -110,12 +110,9 @@ class FlowBot3DDetector:
             )
             animation.append_gif_frame(temp)
 
-        return (
-            max_flow_pt.reshape(
-                3,
-            ),
-            max_flow_vector / np.linalg.norm(max_flow_vector),
-        )
+        return max_flow_pt.reshape(3,), max_flow_vector / np.linalg.norm(
+            max_flow_vector
+        )  # type: ignore
 
 
 class FlowNetAnimation:
