@@ -23,6 +23,10 @@ from flowbot3d.distributed_eval import distributed_eval
 from flowbot3d.grasping.agents.flowbot3d import FlowBot3DDetector, FlowNetAnimation
 from flowbot3d.grasping.agents.grasp_pull import GraspPullAgent
 from flowbot3d.grasping.agents.gt_flow import GTFlowDetector
+from flowbot3d.grasping.agents.umpnet_di import (
+    UMPAnimation,
+    UMPNetPullDirectionDetector,
+)
 from flowbot3d.grasping.env.wrappers import FlowBot3DWrapper
 
 # These are doors which have weird convex hull issues, so grasping doesn't work.
@@ -254,6 +258,7 @@ def set_up_and_run_trial(
 def create_agent(
     model_name, ckpt_path, device, animate, cam_frame, bad_door
 ) -> Tuple[PCAgent, Optional[EpisodeAnimator]]:
+    animation: Optional[EpisodeAnimator]
     if "flowbot" in model_name:
         if animate:
             animation = FlowNetAnimation()
@@ -271,7 +276,17 @@ def create_agent(
     elif "normal" in model_name:
         raise NotImplementedError()
     elif "umpnet" in model_name:
-        raise NotImplementedError()
+        if animate:
+            animation = UMPAnimation()
+        else:
+            animation = None
+
+        agent = GraspPullAgent(
+            contact_detector=GTFlowDetector(bad_door),
+            pull_dir_detector=UMPNetPullDirectionDetector(ckpt_path, device, animation),
+            device=device,
+        )
+        return agent, animation
     elif "screw" in model_name:
         raise NotImplementedError()
     elif "bc" in model_name or "dagger_e2e" in model_name:
