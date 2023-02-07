@@ -68,4 +68,4 @@ class NormalPullDirectionDetector:
             )
 
         # print("max_flow: ", pred_flow)
-        return pred_flow / np.linalg.norm(pred_flow)
+        return pred_flow / np.linalg.norm(pred_flow)  # type: ignore
