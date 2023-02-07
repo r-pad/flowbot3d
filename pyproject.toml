@@ -79,11 +79,14 @@ warn_unused_configs = true
 # Uncomment this when you have imports for mypy to ignore.
 [[tool.mypy.overrides]]
 module = [
+  "cv2.*",
+  "gif.*",
   "gym.*",
   "mani_skill.*",
   "pandas.*",
   "plotly.*",
   "sapien.*",
+  "scipy.*",
   "torch_geometric.*",
 ]
 ignore_missing_imports = true
