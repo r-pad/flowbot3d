@@ -22,6 +22,7 @@ import flowbot3d.grasping.env  # noqa
 from flowbot3d.distributed_eval import distributed_eval
 from flowbot3d.grasping.agents.flowbot3d import FlowBot3DDetector, FlowNetAnimation
 from flowbot3d.grasping.agents.grasp_pull import GraspPullAgent
+from flowbot3d.grasping.agents.gt_flow import GTFlowDetector
 from flowbot3d.grasping.env.wrappers import FlowBot3DWrapper
 
 # These are doors which have weird convex hull issues, so grasping doesn't work.
@@ -260,10 +261,10 @@ def create_agent(
             animation = None
 
         # We use ArtFlowNet predictions to detect both contacts and pull direction.
-        detector = FlowBot3DDetector(ckpt_path, device, cam_frame, animation)
+        flowbot3d_detector = FlowBot3DDetector(ckpt_path, device, cam_frame, animation)
         agent = GraspPullAgent(
-            contact_detector=detector,
-            pull_dir_detector=detector,
+            contact_detector=flowbot3d_detector,
+            pull_dir_detector=flowbot3d_detector,
             device=device,
         )
         return agent, animation
@@ -278,7 +279,13 @@ def create_agent(
     elif "dagger_oracle" in model_name:
         raise NotImplementedError()
     elif "gt_flow" in model_name:
-        raise NotImplementedError()
+        gt_flow_detector = GTFlowDetector(bad_door)
+        agent = GraspPullAgent(
+            contact_detector=gt_flow_detector,
+            pull_dir_detector=gt_flow_detector,
+            device=device,
+        )
+        return agent, None
     else:
         raise ValueError("no agent with that name")
 
