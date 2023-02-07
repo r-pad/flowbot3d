@@ -63,7 +63,6 @@ def vanilla_grasping_policy(
     gripper_vertical,
     env_name,
 ):
-
     obs = env.get_obs()
     # Define primitives
     action = np.zeros(8)
@@ -71,7 +70,6 @@ def vanilla_grasping_policy(
     global GLOBAL_PULL_VECTOR
     # Phase 1: Grasp
     if phase == 1:
-
         delta_T = (
             0.5 * (max_flow_pt - ee_center) / np.linalg.norm(max_flow_pt - ee_center)
         )
@@ -236,7 +234,6 @@ def flow_grasp_weighted_sum(flow_vecs, grasp_scores):
 
 
 def run(env_name, trials, save_video):
-
     datagen_traj = os.path.join(os.getcwd(), "umpnet_bc_demo_traj")
     if not os.path.exists(datagen_traj):
         os.mkdir(datagen_traj)
