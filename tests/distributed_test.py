@@ -10,7 +10,7 @@ def __return_seeds(x):
 
 
 def test_distributed_eval():
-    multiprocessing.set_start_method("spawn")
+    multiprocessing.set_start_method("spawn", force=True)
     args = [{"x": i} for i in range(10)]
 
     results, completeds = distributed_eval(
