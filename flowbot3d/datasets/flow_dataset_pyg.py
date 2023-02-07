@@ -4,7 +4,7 @@ import rpad.partnet_mobility_utils.dataset as pmd
 import torch
 import torch_geometric.data as tgd
 
-from flowbot3d.dataset import Flowbot3DDataset
+from flowbot3d.datasets.flow_dataset import Flowbot3DDataset
 
 
 class Flowbot3DTGData(Protocol):
@@ -15,7 +15,7 @@ class Flowbot3DTGData(Protocol):
     mask: torch.Tensor  # Mask of the part of interest.
 
 
-class Flowbot3DTGDataset(tgd.Dataset):
+class Flowbot3DPyGDataset(tgd.Dataset):
     def __init__(
         self,
         root: str,

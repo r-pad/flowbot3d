@@ -6,8 +6,8 @@ import numpy as np
 import torch
 from rpad.pyg.dataset import CachedByKeyDataset
 
-from flowbot3d.dataset import Flowbot3DDataset
-from flowbot3d.tg_dataset import Flowbot3DTGDataset
+from flowbot3d.datasets.flow_dataset import Flowbot3DDataset
+from flowbot3d.datasets.flow_dataset_pyg import Flowbot3DPyGDataset
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
 
@@ -30,7 +30,7 @@ def test_simple_dataset():
 
 
 def test_simple_tg_dataset():
-    dset = Flowbot3DTGDataset(
+    dset = Flowbot3DPyGDataset(
         root=TESTDATA_DIR,
         split=["7179"],
         randomize_joints=True,
@@ -49,7 +49,7 @@ def test_simple_tg_dataset():
 def test_parallel_sampling():
     with tempfile.TemporaryDirectory() as tmpdir:
         dset = CachedByKeyDataset(
-            dset_cls=Flowbot3DTGDataset,
+            dset_cls=Flowbot3DPyGDataset,
             dset_kwargs=dict(
                 root=TESTDATA_DIR,
                 split=["7179", "100809"],

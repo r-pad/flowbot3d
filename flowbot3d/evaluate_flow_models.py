@@ -13,8 +13,8 @@ import tqdm
 import typer
 from rpad.pyg.dataset import CachedByKeyDataset
 
+from flowbot3d.datasets.flow_dataset_pyg import Flowbot3DPyGDataset
 from flowbot3d.models.artflownet import ArtFlowNet, flow_metrics
-from flowbot3d.tg_dataset import Flowbot3DTGDataset
 
 
 def make_eval_dataset(
@@ -27,7 +27,7 @@ def make_eval_dataset(
     }[dataset]
 
     return CachedByKeyDataset(
-        dset_cls=Flowbot3DTGDataset,
+        dset_cls=Flowbot3DPyGDataset,
         dset_kwargs=dict(
             root=pm_root / "raw",
             split=dataset,
@@ -35,7 +35,7 @@ def make_eval_dataset(
         ),
         data_keys=keys,
         root=pm_root,
-        processed_dirname=Flowbot3DTGDataset.get_processed_dir(
+        processed_dirname=Flowbot3DPyGDataset.get_processed_dir(
             True,
             randomize_camera,
         ),

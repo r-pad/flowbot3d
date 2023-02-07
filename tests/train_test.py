@@ -10,8 +10,8 @@ import torch
 import torch_geometric.loader as tgl
 from rpad.pyg.dataset import CachedByKeyDataset
 
+from flowbot3d.datasets.flow_dataset_pyg import Flowbot3DPyGDataset
 from flowbot3d.models.artflownet import ArtFlowNet
-from flowbot3d.tg_dataset import Flowbot3DTGDataset
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
 
@@ -43,7 +43,7 @@ def test_deterministic_training():
     # Generate a new dataset on the fly. Very nice!
     with tempfile.TemporaryDirectory() as tmpdir:
         dset = CachedByKeyDataset(
-            dset_cls=Flowbot3DTGDataset,
+            dset_cls=Flowbot3DPyGDataset,
             dset_kwargs=dict(
                 root=TESTDATA_DIR,
                 split=["7179", "100809"],

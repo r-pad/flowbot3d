@@ -14,11 +14,11 @@ import torch_geometric.loader as tgl
 import typer
 from rpad.pyg.dataset import CachedByKeyDataset
 
+from flowbot3d.datasets.flow_dataset_pyg import Flowbot3DPyGDataset
+from flowbot3d.datasets.screw_dataset_pyg import ScrewDataset
 from flowbot3d.models.artflownet import ArtFlowNet, ArtFlowNetParams
 from flowbot3d.models.screwnet import ScrewNet
 from flowbot3d.models.umpnet_di import UMPNet, UMPNetParams
-from flowbot3d.screw_dataset import ScrewDataset
-from flowbot3d.tg_dataset import Flowbot3DTGDataset
 
 
 def create_model(
@@ -45,7 +45,7 @@ def create_flowbot_datasets(
 ) -> Tuple[tgd.Dataset, tgd.Dataset, tgd.Dataset]:
     if dataset == "umpnet":
         train_dset = CachedByKeyDataset(
-            dset_cls=Flowbot3DTGDataset,
+            dset_cls=Flowbot3DPyGDataset,
             dset_kwargs=dict(
                 root=root / "raw",
                 split="umpnet-train-train",
@@ -53,7 +53,7 @@ def create_flowbot_datasets(
             ),
             data_keys=rpd.UMPNET_TRAIN_TRAIN_OBJ_IDS,
             root=root,
-            processed_dirname=Flowbot3DTGDataset.get_processed_dir(
+            processed_dirname=Flowbot3DPyGDataset.get_processed_dir(
                 True,
                 randomize_camera,
             ),
@@ -62,7 +62,7 @@ def create_flowbot_datasets(
         )
 
         test_dset = CachedByKeyDataset(
-            dset_cls=Flowbot3DTGDataset,
+            dset_cls=Flowbot3DPyGDataset,
             dset_kwargs=dict(
                 root=root / "raw",
                 split="umpnet-train-test",
@@ -70,7 +70,7 @@ def create_flowbot_datasets(
             ),
             data_keys=rpd.UMPNET_TRAIN_TEST_OBJ_IDS,
             root=root,
-            processed_dirname=Flowbot3DTGDataset.get_processed_dir(
+            processed_dirname=Flowbot3DPyGDataset.get_processed_dir(
                 True,
                 randomize_camera,
             ),
@@ -79,7 +79,7 @@ def create_flowbot_datasets(
         )
 
         unseen_dset = CachedByKeyDataset(
-            dset_cls=Flowbot3DTGDataset,
+            dset_cls=Flowbot3DPyGDataset,
             dset_kwargs=dict(
                 root=root / "raw",
                 split="umpnet-test",
@@ -87,7 +87,7 @@ def create_flowbot_datasets(
             ),
             data_keys=rpd.UMPNET_TEST_OBJ_IDS,
             root=root,
-            processed_dirname=Flowbot3DTGDataset.get_processed_dir(
+            processed_dirname=Flowbot3DPyGDataset.get_processed_dir(
                 True,
                 randomize_camera,
             ),
@@ -96,7 +96,7 @@ def create_flowbot_datasets(
         )
     elif dataset == "single":
         dset = CachedByKeyDataset(
-            dset_cls=Flowbot3DTGDataset,
+            dset_cls=Flowbot3DPyGDataset,
             dset_kwargs=dict(
                 root=root / "raw",
                 split=["7179"],
@@ -104,7 +104,7 @@ def create_flowbot_datasets(
             ),
             data_keys=["7179"],
             root=root,
-            processed_dirname=Flowbot3DTGDataset.get_processed_dir(
+            processed_dirname=Flowbot3DPyGDataset.get_processed_dir(
                 True,
                 randomize_camera,
             ),
