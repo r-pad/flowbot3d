@@ -24,6 +24,7 @@ from flowbot3d.grasping.agents.flowbot3d import FlowBot3DDetector, FlowNetAnimat
 from flowbot3d.grasping.agents.grasp_pull import GraspPullAgent
 from flowbot3d.grasping.agents.gt_flow import GTFlowDetector
 from flowbot3d.grasping.agents.normal import NormalPullDirectionDetector
+from flowbot3d.grasping.agents.screwnet import ScrewNetDetector
 from flowbot3d.grasping.agents.umpnet_di import (
     UMPAnimation,
     UMPNetPullDirectionDetector,
@@ -300,11 +301,23 @@ def create_agent(
         )
         return agent, animation
     elif "screw" in model_name:
-        raise NotImplementedError()
+        if animate:
+            animation = FlowNetAnimation()
+        else:
+            animation = None
+
+        # We use ArtFlowNet predictions to detect both contacts and pull direction.
+        screwnet_detector = ScrewNetDetector(ckpt_path, device, animation, cam_frame)
+        agent = GraspPullAgent(
+            contact_detector=screwnet_detector,
+            pull_dir_detector=screwnet_detector,
+            device=device,
+        )
+        return agent, animation
     elif "bc" in model_name or "dagger_e2e" in model_name:
-        raise NotImplementedError()
+        raise NotImplementedError("bc not implemented")
     elif "dagger_oracle" in model_name:
-        raise NotImplementedError()
+        raise NotImplementedError("dagger not implemented")
     elif "gt_flow" in model_name:
         gt_flow_detector = GTFlowDetector(bad_door)
         agent = GraspPullAgent(

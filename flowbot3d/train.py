@@ -124,6 +124,7 @@ def create_flowbot_datasets(
 def create_screwnet_datasets(
     root: Path,
     dataset: str,
+    normalize=False,
     n_proc=-1,
 ):
     def _dset(split, n_repeat):
@@ -132,10 +133,11 @@ def create_screwnet_datasets(
             dset_kwargs=dict(
                 root=root / "raw",
                 split=split,
+                normalize=normalize,
             ),
             data_keys=ScrewDataset.get_joint_list(root / "raw", split)[0],
             root=root,
-            processed_dirname="processed_screwnet",
+            processed_dirname=ScrewDataset.get_processed_dir(normalize),
             n_repeat=n_repeat,
             n_proc=n_proc,
             seed=12345,
@@ -235,6 +237,7 @@ def train(
     check_val_every_n_epoch: int = 1,
     wandb: bool = False,
     seed: int = 42,
+    normalize: bool = True,
 ):
     # Seed!
     pl.seed_everything(seed, workers=True)
@@ -245,6 +248,7 @@ def train(
         train_dset, test_dset, unseen_dset = create_screwnet_datasets(
             pm_root,
             dataset,
+            normalize,
             n_proc,
         )
     else:
