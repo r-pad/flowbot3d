@@ -111,10 +111,7 @@ class FlowBot3DDetector:
             animation.append_gif_frame(temp)
 
         max_flow_dir = max_flow_vector / np.linalg.norm(max_flow_vector)
-        return (
-            max_flow_pt.reshape((3,)),
-            max_flow_dir,
-        )  # type: ignore
+        return (max_flow_pt.reshape((3,)), max_flow_dir)  # type: ignore
 
 
 class FlowNetAnimation:
