@@ -116,4 +116,4 @@ class ScrewNetDetector:
 
         max_flow_dir = (max_flow_vector / np.linalg.norm(max_flow_vector),)
 
-        return max_flow_pt.reshape((3,)), max_flow_dir
+        return max_flow_pt.reshape((3,)), max_flow_dir  # type: ignore
