@@ -83,6 +83,7 @@ module = [
   "gif.*",
   "gym.*",
   "mani_skill.*",
+  "open3d.*",
   "pandas.*",
   "plotly.*",
   "sapien.*",

@@ -23,6 +23,7 @@ from flowbot3d.distributed_eval import distributed_eval
 from flowbot3d.grasping.agents.flowbot3d import FlowBot3DDetector, FlowNetAnimation
 from flowbot3d.grasping.agents.grasp_pull import GraspPullAgent
 from flowbot3d.grasping.agents.gt_flow import GTFlowDetector
+from flowbot3d.grasping.agents.normal import NormalPullDirectionDetector
 from flowbot3d.grasping.agents.umpnet_di import (
     UMPAnimation,
     UMPNetPullDirectionDetector,
@@ -274,7 +275,18 @@ def create_agent(
         )
         return agent, animation
     elif "normal" in model_name:
-        raise NotImplementedError()
+        if animate:
+            animation = UMPAnimation()
+        else:
+            animation = None
+        contact_detector = GTFlowDetector(bad_door)
+        pull_dir_detector = NormalPullDirectionDetector(animation, cam_frame)
+        agent = GraspPullAgent(
+            contact_detector=contact_detector,
+            pull_dir_detector=pull_dir_detector,
+            device=device,
+        )
+        return agent, animation
     elif "umpnet" in model_name:
         if animate:
             animation = UMPAnimation()
