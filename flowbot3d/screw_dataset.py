@@ -28,10 +28,12 @@ class ScrewDataset(tgd.Dataset):
         root: str,
         split: Union[pmd.AVAILABLE_DATASET, List[str]],
         n_points: Optional[int] = 1200,
+        normalize: bool = False,
     ) -> None:
         super().__init__()
 
         self.n_points = n_points
+        self.normalize = normalize
 
         # Store a list of all joints.
         self.joint_list, self._dataset = ScrewDataset.get_joint_list(root, split)
@@ -47,6 +49,11 @@ class ScrewDataset(tgd.Dataset):
                 joint_name = data.obj.get_joint_by_child(joint_sem.name).name
                 joint_list.append((id, joint_name))
         return joint_list, dset
+
+    @staticmethod
+    def get_processed_dir(normalize):
+        suffix = "_norm" if normalize else ""
+        return f"screw_processed{suffix}"
 
     def len(self) -> int:
         return len(self.joint_list)
@@ -106,6 +113,17 @@ class ScrewDataset(tgd.Dataset):
             ixs = np.random.permutation(range(len(pos)))[: self.n_points]
             pos = pos[ixs]
             mask = mask[ixs]
+
+        if self.normalize:
+            # Normalize XYZ.
+            centroid = pos.mean(axis=-2)
+            pos = pos - centroid
+            scale = (1 / np.abs(pos).max()) * 0.999999
+            pos = pos * scale
+
+            # Normalize origin by the same factors.
+            origin_base = origin_base - centroid
+            origin_base = origin_base * scale
 
         data = tgd.Data(
             id=raw_data.obj_id,

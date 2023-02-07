@@ -50,6 +50,33 @@ class ScrewNet(pl.LightningModule):
         x = self.lin3(x)
         return x[:, :3], x[:, 3:]
 
+    def predict(self, xyz: torch.Tensor, mask: torch.Tensor):
+        assert len(xyz) == len(mask)
+        assert len(xyz.shape) == 2
+        assert len(mask.shape) == 1
+
+        # Shift and scale the input.
+        centroid = xyz.mean(axis=-2)  # type: ignore
+        xyz = xyz - centroid
+        scale = (1 / torch.abs(xyz).max()) * 0.999999
+        xyz = xyz * scale
+
+        data = tgd.Data(pos=xyz, mask=mask.unsqueeze(-1), origin=None, axis=None)
+        batch = tgd.Batch.from_data_list([data])
+        batch = batch.to(self.device)
+        self.eval()
+        with torch.no_grad():
+            axis, origin = self.forward(batch)
+
+        # Undo the shift and scale to the origin (but not the axis, that's a unit vec).
+        origin = origin / scale
+        origin += centroid
+
+        # Normalize the axis prediction.
+        axis = axis / axis.norm()
+
+        return axis, origin
+
     def _step(self, batch: tgd.Batch, mode):
         pred_axis, pred_origin = self(batch)
 

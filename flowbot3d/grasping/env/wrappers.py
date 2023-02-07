@@ -14,6 +14,7 @@ class FlowBot3DWrapper(gym.ObservationWrapper):
         # obs = process_mani_skill_base(obs, env)
         urdf = PMTree.parse_urdf_from_string(self.env.cabinet.export_urdf())
         chain = urdf.get_chain(self.env.target_link.name)
+        final_joint = urdf.get_joint_by_child(self.env.target_link.name)
 
         return {
             **observation,
@@ -25,4 +26,5 @@ class FlowBot3DWrapper(gym.ObservationWrapper):
             "ee_vels": self.env.agent.get_ee_vels(),
             "chain": chain,
             "cam_pos": self.env.cameras[1].sub_cameras[0].get_pose().p,
+            "final_joint": final_joint,
         }
