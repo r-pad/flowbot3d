@@ -1,12 +1,14 @@
 [project]
 name = "flowbot3d"
 version = "0.1.0"
-description = "A Python Package Template"
+description = "FlowBot3D: Learning 3D Articulation Flow to Manipulate Articulated Objects"
 readme = "README.md"
 requires-python = ">=3.6"
 license = {file = "LICENSE.txt"}
 authors = [
-  {email = "baeisner@andrew.cmu.edu", name = "Ben Eisner"}
+  {email = "baeisner@andrew.cmu.edu", name = "Ben Eisner"},
+  {email = "haolunz@andrew.cmu.edu", name = "Harry Zhang"},
+  {email = "dheld@andrew.cmu.edu", name = "David Held"}
 ]
 dependencies = [
   "gif",
