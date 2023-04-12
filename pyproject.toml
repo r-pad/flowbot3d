@@ -34,7 +34,7 @@ dependencies = [
   "torch-sparse >= 0.6",
   "torch-cluster >= 1.6.0",
   "torch-spline-conv >= 1.2.1",
-  "torch-geometric >= 2.0",
+  "torch-geometric >= 2.0, < 2.3",
   "transforms3d",
   "trimesh",
   "tqdm",
