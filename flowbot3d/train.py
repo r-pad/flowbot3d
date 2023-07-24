@@ -20,8 +20,6 @@ from flowbot3d.models.artflownet import ArtFlowNet, ArtFlowNetParams
 from flowbot3d.models.screwnet import ScrewNet
 from flowbot3d.models.umpnet_di import UMPNet, UMPNetParams
 
-import os
-os.environ['WANDB_SILENT']="true"
 
 def create_model(
     model: str, lr: float, mask_input_channel: bool = True
