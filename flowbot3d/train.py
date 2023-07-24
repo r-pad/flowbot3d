@@ -20,6 +20,8 @@ from flowbot3d.models.artflownet import ArtFlowNet, ArtFlowNetParams
 from flowbot3d.models.screwnet import ScrewNet
 from flowbot3d.models.umpnet_di import UMPNet, UMPNetParams
 
+import os
+os.environ['WANDB_SILENT']="true"
 
 def create_model(
     model: str, lr: float, mask_input_channel: bool = True
@@ -42,6 +44,7 @@ def create_flowbot_datasets(
     dataset: str,
     n_proc=-1,
     randomize_camera: bool = True,
+    seed=42,
 ) -> Tuple[tgd.Dataset, tgd.Dataset, tgd.Dataset]:
     if dataset == "umpnet":
         train_dset = CachedByKeyDataset(
@@ -50,6 +53,7 @@ def create_flowbot_datasets(
                 root=root / "raw",
                 split="umpnet-train-train",
                 randomize_camera=randomize_camera,
+                seed=seed
             ),
             data_keys=rpd.UMPNET_TRAIN_TRAIN_OBJ_IDS,
             root=root,
@@ -58,7 +62,8 @@ def create_flowbot_datasets(
                 randomize_camera,
             ),
             n_repeat=100,
-            n_proc=n_proc,
+            n_workers=32, 
+            n_proc_per_worker=n_proc,
         )
 
         test_dset = CachedByKeyDataset(
@@ -67,6 +72,7 @@ def create_flowbot_datasets(
                 root=root / "raw",
                 split="umpnet-train-test",
                 randomize_camera=randomize_camera,
+                seed=seed
             ),
             data_keys=rpd.UMPNET_TRAIN_TEST_OBJ_IDS,
             root=root,
@@ -75,7 +81,8 @@ def create_flowbot_datasets(
                 randomize_camera,
             ),
             n_repeat=1,
-            n_proc=n_proc,
+            n_workers=32, 
+            n_proc_per_worker=n_proc,
         )
 
         unseen_dset = CachedByKeyDataset(
@@ -84,6 +91,7 @@ def create_flowbot_datasets(
                 root=root / "raw",
                 split="umpnet-test",
                 randomize_camera=randomize_camera,
+                seed=seed
             ),
             data_keys=rpd.UMPNET_TEST_OBJ_IDS,
             root=root,
@@ -92,7 +100,8 @@ def create_flowbot_datasets(
                 randomize_camera,
             ),
             n_repeat=1,
-            n_proc=n_proc,
+            n_workers=32, 
+            n_proc_per_worker=n_proc,
         )
     elif dataset == "single":
         dset = CachedByKeyDataset(
@@ -101,6 +110,7 @@ def create_flowbot_datasets(
                 root=root / "raw",
                 split=["7179"],
                 randomize_camera=randomize_camera,
+                seed=seed
             ),
             data_keys=["7179"],
             root=root,
@@ -109,7 +119,8 @@ def create_flowbot_datasets(
                 randomize_camera,
             ),
             n_repeat=1,
-            n_proc=n_proc,
+            n_workers=32, 
+            n_proc_per_worker=n_proc,
         )
         train_dset = dset
         test_dset = dset
@@ -257,6 +268,7 @@ def train(
             dataset,
             n_proc,
             randomize_camera=randomize_camera,
+            seed,
         )
 
     train_loader = tgl.DataLoader(train_dset, batch_size, shuffle=True, num_workers=0)
@@ -276,6 +288,7 @@ def train(
         project = "flowbot3d"
         logger = plog.WandbLogger(
             project=project,
+            entity="r-pad",
             config={
                 "dataset": dataset,
                 "model": model_type,
@@ -306,7 +319,8 @@ def train(
 
     # Create the trainer, which we'll train on only 1 gpu.
     trainer = pl.Trainer(
-        gpus=1,
+        accelerator="gpu",
+        devices=[0],
         logger=logger,
         callbacks=cbs,
         log_every_n_steps=log_every_n_steps,
