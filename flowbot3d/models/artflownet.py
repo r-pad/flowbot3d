@@ -139,7 +139,7 @@ class ArtFlowNet(pl.LightningModule):
             batch_size=len(batch),
         )
 
-        return f_pred, loss
+        return loss
 
     def training_step(self, batch: tgd.Batch, batch_id):  # type: ignore
         self.train()
