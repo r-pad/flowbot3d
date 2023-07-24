@@ -12,7 +12,8 @@ authors = [
 ]
 dependencies = [
   "gif",
-  "gym <= 0.20.0",
+  # "gym <= 0.20.0",  # This specific version is probably desired, but the CI no longer seems to build :( will fix later.
+  "gym",
   "h5py",
   "numpy <= 1.23.1",
   "open3d",

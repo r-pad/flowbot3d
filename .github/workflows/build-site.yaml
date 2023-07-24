@@ -22,6 +22,9 @@ jobs:
         with:
           python-version: '3.8'
       ##############################################
+      - name: Update pip and setuptools.
+        run: pip install --upgrade pip setuptools==57.1.0 wheel
+
       - name: Install pyg special-like.
         run: pip install pyg-lib torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cpu.html
 

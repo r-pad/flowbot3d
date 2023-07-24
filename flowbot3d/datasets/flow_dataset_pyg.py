@@ -23,6 +23,7 @@ class Flowbot3DPyGDataset(tgd.Dataset):
         randomize_joints: bool = True,
         randomize_camera: bool = True,
         n_points: Optional[int] = 1200,
+        seed: int = 42,
     ) -> None:
         super().__init__()
 
@@ -33,12 +34,13 @@ class Flowbot3DPyGDataset(tgd.Dataset):
             randomize_camera,
             n_points,
         )
+        self.seed = seed
 
     def len(self) -> int:
         return len(self.dataset)
 
     def get(self, index) -> tgd.Data:
-        return self.get_data(self.dataset._dataset._ids[index], seed=None)
+        return self.get_data(self.dataset._dataset._ids[index])
 
     @staticmethod
     def get_processed_dir(randomize_joints, randomize_camera):
@@ -46,8 +48,8 @@ class Flowbot3DPyGDataset(tgd.Dataset):
         camera_chunk = "rc" if randomize_camera else "sc"
         return f"processed_{joint_chunk}_{camera_chunk}"
 
-    def get_data(self, obj_id: str, seed=None) -> Flowbot3DTGData:
-        data_dict = self.dataset.get_data(obj_id, seed)
+    def get_data(self, obj_id: str) -> Flowbot3DTGData:
+        data_dict = self.dataset.get_data(obj_id, self.seed)
 
         data = tgd.Data(
             id=data_dict["id"],

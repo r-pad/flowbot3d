@@ -40,7 +40,7 @@ def make_eval_dataset(
             randomize_camera,
         ),
         n_repeat=1,
-        n_proc=n_proc,
+        n_proc_per_worker=n_proc,
         seed=42,
     )
 
