@@ -268,7 +268,7 @@ def train(
             dataset,
             n_proc,
             randomize_camera=randomize_camera,
-            seed,
+            seed=seed,
         )
 
     train_loader = tgl.DataLoader(train_dset, batch_size, shuffle=True, num_workers=0)
