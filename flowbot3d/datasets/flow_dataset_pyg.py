@@ -23,7 +23,7 @@ class Flowbot3DPyGDataset(tgd.Dataset):
         randomize_joints: bool = True,
         randomize_camera: bool = True,
         n_points: Optional[int] = 1200,
-        seed: int = 42
+        seed: int = 42,
     ) -> None:
         super().__init__()
 
