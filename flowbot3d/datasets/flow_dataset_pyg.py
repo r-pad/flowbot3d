@@ -48,8 +48,10 @@ class Flowbot3DPyGDataset(tgd.Dataset):
         camera_chunk = "rc" if randomize_camera else "sc"
         return f"processed_{joint_chunk}_{camera_chunk}"
 
-    def get_data(self, obj_id: str) -> Flowbot3DTGData:
-        data_dict = self.dataset.get_data(obj_id, self.seed)
+    def get_data(self, obj_id: str, seed=None) -> Flowbot3DTGData:
+        if seed is None:
+            seed = self.seed
+        data_dict = self.dataset.get_data(obj_id, seed)
 
         data = tgd.Data(
             id=data_dict["id"],
