@@ -1,0 +1,2 @@
+pretrained filter=lfs diff=lfs merge=lfs -text
+pretrained/model.ckpt filter=lfs diff=lfs merge=lfs -text
