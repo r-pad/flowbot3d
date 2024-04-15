@@ -193,7 +193,11 @@ There are many commands to run. For each command, assume that:
 
 Behavioral cloning baselines rely on infrustructure in our custom version of ManiSkill-Learn. Note that this is based on a very early version of ManiSkill-Learn, so it might be very different from the official code base now.
 
-When the custom ManiSkill-Learn repo is installed correctly, we can then collect expert data for our behavioral cloning agents. Specifically, as indicated in the paper, we use an oracle ground-truth-flow-based policy to collect expert trajectories for BC. We run the following script to collect trajectories:
+When the custom ManiSkill-Learn repo is installed correctly, we can then collect expert data for our behavioral cloning agents. 
+
+### BC
+
+Specifically, as indicated in the paper, we use an oracle ground-truth-flow-based policy to collect expert trajectories for BC. We run the following script to collect trajectories:
 
 ```
 python flowbot3d/grasping/agents/bc/bc_datagen_gt_flow_grasping.py
@@ -211,29 +215,25 @@ This would automatically generate point clouds data that the PointNet/Transforme
 This script loads the demo data, trains the agent using the data, evaluates the agent and logs the numbers to a text file.
 
 
-### BC
-
-TODO
-
 ### DAgger E2E
 
-TODO
+Running BC baselines will log the trajectories data. Using the same procedure above, we can augment the original BC dataset by running the oracle policy on the new rollout trajectories. Following the same steps, we can train a DAgger E2E policy.
 
 ### DAgger Oracle
 
-TODO
+The only difference between DAgger E2E and DAgger Oracle is when to start running the BC-based policy. DAgger oracle uses the GT-flow-based oracle policy to select the contact point for the rollout. After the contact point is selected, we can then start to run the BC/DAgger policy. The switch of running the oracle policy is in the BC policy eval script.
 
 ### BC + F
 
-TODO
+This is again very similar to BC execpt in the PointNet-Transformer architecture provided in ManiSkill-Learn, we also add 3 extra channels to feed in the GT-flow at input. The above data-generation script also generates and logs ground-truth flows. We just need to switch the input to the network when training and evaluating this policy.
 
 ### DAgger E2E + F
 
-TODO
+Same as above, but with the DAgger E2E policy.
 
 ### DAgger Oracle + F
 
-TODO
+Same as above, but with the DAgger Oracle policy.
 
 ## Run ManiSkill Evals
 
